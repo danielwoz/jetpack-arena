@@ -147,6 +147,13 @@ stars over their head. Every soldier wears a dark camo variant keyed to
 their callsign. Rounds end with a 10-second frozen
 intermission showing the final scoreboard.
 
+## Deployments
+
+- **game.mynet.lol** — stable, pinned to a release tag; promote with
+  `scripts/release.sh <tag>`.
+- **game-dev.mynet.lol** — development, runs the working tree; update with
+  `npm run build` + restarting `webfps-dev`.
+
 ## Environment knobs
 
 | Variable | Effect |
