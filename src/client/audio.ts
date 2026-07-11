@@ -172,6 +172,35 @@ export class GameAudio {
     osc.stop(t + dur);
   }
 
+  // a round ringing off the pan: bright inharmonic metal partials
+  clank(dx = 0, dist = 0): void {
+    const bus = this.spatial(dx, dist);
+    if (!bus) return;
+    const t = this.ctx!.currentTime;
+    for (const [f, g, dur] of [[2350, 0.5, 0.28], [3620, 0.3, 0.2], [5210, 0.18, 0.12]] as const) {
+      const o = this.ctx!.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const og = this.ctx!.createGain();
+      og.gain.setValueAtTime(g, t);
+      og.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.connect(og);
+      og.connect(bus);
+      o.start(t);
+      o.stop(t + dur + 0.02);
+    }
+    // strike transient
+    const hp = this.ctx!.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 3000;
+    const env = this.ctx!.createGain();
+    env.gain.setValueAtTime(0.35, t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.02);
+    hp.connect(env);
+    env.connect(bus);
+    this.noise(hp, 0.02);
+  }
+
   hitThud(dx = 0, dist = 0): void {
     const bus = this.spatial(dx, dist);
     if (!bus) return;

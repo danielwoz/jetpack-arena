@@ -230,9 +230,12 @@ function handleEvents(snap: Snapshot): void {
           if (sw) effects.spawnSwing(sw.x, sw.y, ev.aim);
         }
         break;
-      case 'clank':
+      case 'clank': {
         effects.spawnClank(ev.x, ev.y);
+        const me = predictor.state;
+        if (me) audio.clank(ev.x - me.x, Math.hypot(ev.x - me.x, ev.y - me.y));
         break;
+      }
       case 'reset':
         world.setHoles([]);
         hud.announce('NEW ROUND');
