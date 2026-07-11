@@ -31,12 +31,15 @@ body.playing { cursor: none; }
 /* ---------- full-screen menus ---------- */
 .screen {
   position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
   background: rgba(6, 8, 18, 0.72);
   backdrop-filter: blur(4px);
   z-index: 20;
+  overflow-y: auto;                 /* small windows scroll the panel */
+  padding: 24px 12px;
 }
 .panel {
+  margin: auto;                     /* centers when it fits, scrolls when not */
   text-align: center;
   padding: 36px 44px;
   background: rgba(13, 17, 32, 0.92);
