@@ -338,19 +338,27 @@ function drawCity(
       const drawTiled = (x: number, y: number, w2: number, h2: number): void => {
         const TILE_W = 220;                       // world units per facade cell
         const TILE_H = 440;
-        for (let ty = 0; ty < h2; ty += TILE_H) {
-          const th = Math.min(TILE_H, h2 - ty);
-          const kf = ty / h2;
-          const rowTop = mix(tint, tintB, kf);
-          const rowBot = mix(tint, tintB, Math.min(1, (ty + th) / h2));
+        // top row shows the full cell (transparent rooftop silhouette);
+        // rows below repeat the solid lower half so alpha never gaps
+        const SUB_V0 = 0.55;
+        const SUB_H = TILE_H * (1 - SUB_V0);
+        let ty = 0;
+        while (ty < h2) {
+          const first = ty === 0;
+          const rowH = first ? Math.min(TILE_H, h2) : Math.min(SUB_H, h2 - ty);
+          const v0 = first ? 0 : SUB_V0;
+          const v1 = first ? rowH / TILE_H : SUB_V0 + (rowH / TILE_H);
+          const rowTop = mix(tint, tintB, ty / h2);
+          const rowBot = mix(tint, tintB, Math.min(1, (ty + rowH) / h2));
           for (let tx3 = 0; tx3 < w2; tx3 += TILE_W) {
             const tw = Math.min(TILE_W, w2 - tx3);
-            r.texQuadUV(x + tx3, y + ty, tw, th,
-              cu, cv,
+            r.texQuadUV(x + tx3, y + ty, tw, rowH,
+              cu, cv + v0 / FACADE_ROWS,
               cu + (tw / TILE_W) / FACADE_COLS,
-              cv + (th / TILE_H) / FACADE_ROWS,
+              cv + v1 / FACADE_ROWS,
               rowTop, rowBot);
           }
+          ty += rowH;
         }
       };
       drawTiled(b.x, b.top, b.w, h);
