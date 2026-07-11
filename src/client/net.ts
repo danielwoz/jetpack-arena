@@ -1,0 +1,89 @@
+import { INTERP_DELAY_TICKS, TICK_MS } from '../shared/constants.ts';
+import type { C2S, InputCmd, Loadout, NadeType, S2C, Snapshot } from '../shared/types.ts';
+import { world } from './world.ts';
+
+function serverUrl(): string {
+  const lag = new URLSearchParams(location.search).get('lag');
+  const query = lag ? `?lag=${encodeURIComponent(lag)}` : '';
+  if (import.meta.env.DEV) {
+    return `ws://${location.hostname}:8090${query}`;
+  }
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${location.host}${query}`;
+}
+
+export class Net {
+  myId = -1;
+  onSnap: (s: Snapshot) => void = () => {};
+  onClose: () => void = () => {};
+
+  private ws!: WebSocket;
+  // Estimated current server tick, advanced by wall clock and nudged toward
+  // each snapshot's tick to absorb jitter.
+  private estTick = -1;
+
+  static connect(name: string, loadout: Loadout, nadeType: NadeType): Promise<Net> {
+    return new Promise((resolve, reject) => {
+      const net = new Net();
+      const ws = new WebSocket(serverUrl());
+      net.ws = ws;
+      let welcomed = false;
+
+      ws.onopen = () => net.send({ t: 'join', name, loadout, nadeType });
+      ws.onerror = () => { if (!welcomed) reject(new Error('could not reach server')); };
+      ws.onclose = () => {
+        if (!welcomed) reject(new Error('connection closed'));
+        else net.onClose();
+      };
+      ws.onmessage = (ev) => {
+        let msg: S2C;
+        try { msg = JSON.parse(ev.data as string) as S2C; } catch { return; }
+        switch (msg.t) {
+          case 'welcome':
+            net.myId = msg.id;
+            net.estTick = msg.tick;
+            world.setHoles(msg.holes);   // craters that predate this client
+            welcomed = true;
+            resolve(net);
+            break;
+          case 'reject':
+            reject(new Error(msg.reason));
+            ws.close();
+            break;
+          case 'ping':
+            net.send({ t: 'pong', id: msg.id });
+            break;
+          case 'snap':
+            net.syncClock(msg.tick);
+            net.onSnap(msg);
+            break;
+        }
+      };
+    });
+  }
+
+  private syncClock(snapTick: number): void {
+    if (this.estTick < 0) this.estTick = snapTick;
+    else this.estTick += 0.1 * (snapTick - this.estTick);
+  }
+
+  advance(ms: number): void {
+    if (this.estTick >= 0) this.estTick += ms / TICK_MS;
+  }
+
+  renderTick(): number {
+    return this.estTick - INTERP_DELAY_TICKS;
+  }
+
+  sendInput(cmd: InputCmd): void {
+    this.send({ t: 'in', cmd });
+  }
+
+  sendRespawn(loadout: Loadout, nadeType: NadeType): void {
+    this.send({ t: 'respawn', loadout, nadeType });
+  }
+
+  private send(msg: C2S): void {
+    if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
+  }
+}

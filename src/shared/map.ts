@@ -1,0 +1,121 @@
+import { WORLD_H, WORLD_W } from './constants.ts';
+import type { Rect } from './types.ts';
+
+// Solid kinds drive tinting only; collision treats them all the same.
+export type SolidKind = 'ground' | 'rock' | 'plat' | 'boulder' | 'wall';
+
+export interface MapRect extends Rect {
+  k: SolidKind;
+}
+
+function r(x: number, y: number, w: number, h: number, k: SolidKind): MapRect {
+  return { x, y, w, h, k };
+}
+
+// World is y-down: y=0 is the sky ceiling, ground sits near y=3000.
+// Vertical spacing keeps every layer reachable on a partial fuel tank:
+// ground → mid platforms → high shelves → boulders → summit boulders.
+export const SOLIDS: MapRect[] = [
+  // borders (invisible walls just outside the world) — indestructible
+  { ...r(-200, -200, 200, WORLD_H + 400, 'wall'), ind: true },
+  { ...r(WORLD_W, -200, 200, WORLD_H + 400, 'wall'), ind: true },
+  { ...r(-200, -200, WORLD_W + 400, 200, 'wall'), ind: true },
+
+  // bedrock — the base floor; grenades cannot breach it
+  { ...r(0, 2900, 8000, 200, 'ground'), ind: true },
+
+  // rolling terrain
+  r(0, 2700, 900, 200, 'ground'),
+  r(900, 2800, 700, 100, 'ground'),
+  r(1600, 2620, 520, 280, 'ground'),
+  r(2120, 2830, 880, 70, 'ground'),
+  r(3000, 2660, 800, 240, 'ground'),
+  r(3800, 2810, 1000, 90, 'ground'),
+  r(4800, 2560, 620, 340, 'ground'),
+  r(5420, 2790, 880, 110, 'ground'),
+  r(6300, 2660, 700, 240, 'ground'),
+  r(7000, 2760, 1000, 140, 'ground'),
+
+  // rock towers / mesas
+  r(1150, 2150, 130, 750, 'rock'),
+  r(2560, 2050, 150, 850, 'rock'),
+  r(4470, 1980, 160, 920, 'rock'),
+  r(6060, 2120, 140, 780, 'rock'),
+  r(7480, 2230, 130, 670, 'rock'),
+
+  // mid-height platforms
+  r(420, 2280, 300, 44, 'plat'),
+  r(760, 2050, 240, 44, 'plat'),
+  r(1500, 2180, 320, 44, 'plat'),
+  r(1950, 2380, 260, 44, 'plat'),
+  r(2300, 2150, 300, 44, 'plat'),
+  r(2900, 2250, 280, 44, 'plat'),
+  r(3350, 2050, 320, 44, 'plat'),
+  r(3760, 2350, 300, 44, 'plat'),
+  r(4200, 2200, 260, 44, 'plat'),
+  r(5000, 2100, 320, 44, 'plat'),
+  r(5600, 2300, 280, 44, 'plat'),
+  r(6500, 2200, 300, 44, 'plat'),
+  r(6900, 2400, 260, 44, 'plat'),
+  r(7250, 2000, 280, 44, 'plat'),
+
+  // high shelves
+  r(600, 1700, 260, 44, 'plat'),
+  r(1300, 1550, 300, 44, 'plat'),
+  r(2100, 1750, 280, 44, 'plat'),
+  r(2750, 1600, 320, 44, 'plat'),
+  r(3600, 1650, 300, 44, 'plat'),
+  r(4300, 1500, 280, 44, 'plat'),
+  r(5200, 1700, 300, 44, 'plat'),
+  r(5900, 1550, 280, 44, 'plat'),
+  r(6700, 1700, 300, 44, 'plat'),
+  r(7400, 1600, 260, 44, 'plat'),
+
+  // floating boulders
+  r(500, 1150, 220, 140, 'boulder'),
+  r(1000, 900, 180, 120, 'boulder'),
+  r(1550, 1200, 260, 160, 'boulder'),
+  r(1900, 750, 200, 130, 'boulder'),
+  r(2400, 1050, 240, 150, 'boulder'),
+  r(2850, 600, 180, 110, 'boulder'),
+  r(3200, 1250, 220, 140, 'boulder'),
+  r(3700, 850, 260, 160, 'boulder'),
+  r(4100, 1100, 200, 120, 'boulder'),
+  r(4600, 650, 220, 140, 'boulder'),
+  r(5000, 1200, 240, 150, 'boulder'),
+  r(5500, 900, 180, 110, 'boulder'),
+  r(5850, 1250, 220, 130, 'boulder'),
+  r(6300, 700, 200, 140, 'boulder'),
+  r(6750, 1050, 240, 150, 'boulder'),
+  r(7200, 800, 180, 120, 'boulder'),
+  r(7600, 1150, 220, 140, 'boulder'),
+
+  // summit boulders
+  r(800, 500, 170, 110, 'boulder'),
+  r(2200, 450, 160, 100, 'boulder'),
+  r(3450, 480, 170, 100, 'boulder'),
+  r(4350, 400, 180, 110, 'boulder'),
+  r(5250, 430, 160, 100, 'boulder'),
+  r(6050, 420, 160, 100, 'boulder'),
+  r(7000, 470, 170, 110, 'boulder'),
+];
+
+// x, y of player center standing on a surface (surface top − player half height)
+export const SPAWN_POINTS: { x: number; y: number }[] = [
+  { x: 450, y: 2672 },
+  { x: 1050, y: 2772 },
+  { x: 1850, y: 2592 },
+  { x: 2500, y: 2802 },
+  { x: 3400, y: 2632 },
+  { x: 4200, y: 2782 },
+  { x: 5100, y: 2532 },
+  { x: 5800, y: 2762 },
+  { x: 6600, y: 2632 },
+  { x: 7400, y: 2732 },
+  { x: 1650, y: 2152 },
+  { x: 3450, y: 2022 },
+  { x: 5150, y: 2072 },
+  { x: 6650, y: 2172 },
+  { x: 2850, y: 1572 },
+  { x: 5950, y: 1522 },
+];

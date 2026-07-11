@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JETPACK ARENA</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>" />
+</head>
+<body>
+  <div id="stage">
+  <canvas id="gl"></canvas>
+  <canvas id="overlay"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="killfeed"></div>
+    <div id="stats">-- fps · -- ms</div>
+    <div id="topfour"></div>
+    <div id="roundtimer">--:--</div>
+    <div id="announce" class="hidden"></div>
+    <canvas id="minimap" width="520" height="196"></canvas>
+    <div id="bars">
+      <div class="bar armor hidden"><div class="fill" id="armorfill"></div><span class="bartext" id="armortext"></span></div>
+      <div class="bar hp"><div class="fill" id="hpfill"></div><span class="bartext" id="hptext"></span></div>
+      <div class="bar fuel"><div class="fill" id="fuelfill"></div><span class="bartext">FUEL</span></div>
+    </div>
+    <div id="ammo">
+      <div id="slots"></div>
+      <span id="weaponname"></span>
+      <span id="ammotext"></span>
+      <span id="reloadtext" class="hidden">RELOADING</span>
+      <span id="healtext" class="hidden">BANDAGING</span>
+      <div id="nades"></div>
+    </div>
+    <div id="scoreboard" class="hidden"></div>
+  </div>
+  <div id="damageflash"></div>
+  <div id="lowfuel"></div>
+  <div id="lowhp"></div>
+  <div id="whiteout"></div>
+  <div id="crosshair" class="hidden"></div>
+  </div>
+
+  <div id="join" class="screen">
+    <div class="panel">
+      <h1>JETPACK ARENA</h1>
+      <p class="sub">A/D move · W jetpack · S dive · SPACE jump · click fire · R reload · Q bandage · E hold-prime grenade · TAB scores</p>
+      <input id="name" maxlength="16" placeholder="callsign" autocomplete="off" spellcheck="false" />
+      <div id="join-weapons" class="loadout"></div>
+      <button id="joinbtn">DEPLOY</button>
+      <button id="controlsbtn" class="minor">CONTROLS</button>
+      <button id="settingsbtn" class="minor">SETTINGS</button>
+      <div id="join-status"></div>
+    </div>
+  </div>
+
+  <div id="controls" class="screen hidden">
+    <div class="panel">
+      <h2 style="color:#9fc2ff">CONTROLS</h2>
+      <p class="sub">click a key to rebind · fire is always left mouse</p>
+      <div id="bindlist"></div>
+      <button id="bindreset" class="minor">RESET DEFAULTS</button>
+      <button id="bindclose">DONE</button>
+    </div>
+  </div>
+
+  <div id="death" class="screen hidden">
+    <div class="panel">
+      <h2 id="deathmsg">YOU DIED</h2>
+      <div id="death-weapons" class="loadout"></div>
+      <button id="respawnbtn" disabled>RESPAWN</button>
+    </div>
+  </div>
+
+  <div id="settings" class="screen hidden">
+    <div class="panel">
+      <h2 style="color:#9fc2ff">SETTINGS</h2>
+      <p class="sub">ESC opens this menu any time</p>
+      <div class="setrow"><span>MUSIC</span><input type="range" id="vol-music" min="0" max="100" /></div>
+      <div class="setrow"><span>EFFECTS</span><input type="range" id="vol-sfx" min="0" max="100" /></div>
+      <button id="setcontrols" class="minor">INPUT / KEY BINDINGS</button>
+      <button id="setclose">DONE</button>
+    </div>
+  </div>
+
+  <div id="disconnected" class="screen hidden">
+    <div class="panel">
+      <h2>CONNECTION LOST</h2>
+      <p class="sub">refresh the page to rejoin</p>
+    </div>
+  </div>
+
+  <script type="module" src="/src/client/main.ts"></script>
+</body>
+</html>

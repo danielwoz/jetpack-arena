@@ -1,0 +1,827 @@
+import type { IncomingMessage } from 'node:http';
+import type { WebSocket } from 'ws';
+import {
+  AFTERBURN_TICKS, SPAWN_MAGS, BURN_DPS, DT, FIRE_PATCH_R, FIRE_PATCH_TICKS,
+  FLASH_BLIND_SECS, FLASH_RADIUS,
+  FUEL_MAX, GRAVITY, INPUT_QUEUE_CAP, MAX_FALL_SPEED, MAX_HP,
+  MAX_NAME_LEN, MAX_PLAYERS, MIN_PLAYERS, NADE_BOUNCE, NADE_COUNT,
+  NADE_HOLE_R, NADE_SHOCK_PUSH, NADE_SHOCK_R, NADE_THROW_SPEED, NAPALM_DIRECT_TICKS, PING_INTERVAL_TICKS,
+  PLAYER_HH, PLAYER_HW, ROUND_TICKS, SNAPSHOT_EVERY, SPAWN_PROTECT_TICKS,
+  TICK_MS, TICK_RATE, WORLD_H, WORLD_W,
+} from '../shared/constants.ts';
+import { SOLIDS, SPAWN_POINTS } from '../shared/map.ts';
+import { rayVsSolids } from '../shared/physics.ts';
+import { dist } from '../shared/math.ts';
+import { applyDamage, stepPlayer } from '../shared/step.ts';
+import { DEFAULT_LOADOUT, NADES, SLOT_OPTIONS, WEAPONS, isNadeType, validLoadout } from '../shared/weapons.ts';
+import { World } from '../shared/world.ts';
+import type { GameEvent, InputCmd, Loadout, NadeType, NetFire, NetNade, NetPlayer, PlayerState, WeaponId } from '../shared/types.ts';
+import { Conn } from './client.ts';
+import { explode, fireBullets, kill, stepBullets } from './combat.ts';
+import type { Bullet, CombatPlayer } from './combat.ts';
+import { LagComp } from './lagcomp.ts';
+
+interface Nade {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  boomAt: number;      // server tick of detonation
+  owner: number;
+  kind: NadeType;
+}
+
+interface FirePatch {
+  x: number;
+  y: number;
+  until: number;
+  owner: number;
+}
+
+interface BotBrain {
+  mx: -1 | 0 | 1;
+  up: boolean;
+  jump: boolean;
+  nadeHold: number;
+  losTicks: number;    // consecutive ticks of clear sight to the target
+  wasFalling: boolean;
+  flareSkip: boolean;  // this fall, they're too distracted to flare
+  path: { x: number; y: number }[];
+  wpi: number;         // current waypoint index
+  goalRight: boolean;  // patrolling toward the right edge?
+  stuck: number;
+  seq: number;
+}
+
+interface ServerPlayer {
+  id: number;
+  name: string;
+  conn: Conn | null;
+  bot: BotBrain | null;
+  state: PlayerState;
+  kills: number;
+  deaths: number;
+  assists: number;
+  dmg: number;
+  recent: { id: number; dmg: number; tick: number }[];
+  burnTicks: number;   // ticks of fire left on this player
+  burnBy: number;      // who lit them up
+  blindTicks: number;  // flashbang blindness remaining
+  queue: InputCmd[];
+  lastSeq: number;       // last processed input seq (the snapshot ack)
+  lastQueuedSeq: number;
+  lastCmd: InputCmd;
+  respawnAt: number;
+  wantsRespawn: boolean;
+  respawnLoadout: Loadout;
+  respawnNade: NadeType;
+  protUntil: number;
+  rtt: number;
+  pings: Map<number, number>;   // outstanding ping id → sent-at ms
+}
+
+function sanitizeName(raw: unknown): string {
+  if (typeof raw !== 'string') return 'pilot';
+  const clean = raw.replace(/[^\x20-\x7e]/g, '').trim().slice(0, MAX_NAME_LEN);
+  return clean.length > 0 ? clean : 'pilot';
+}
+
+// bots deploy under famous outlaw aliases, tagged so nobody mistakes them
+const BOT_NAMES = [
+  'Jesse James', 'Billy the Kid', 'Butch Cassidy', 'Sundance Kid',
+  'Doc Holliday', 'Belle Starr', 'Bonnie Parker', 'Clyde Barrow',
+];
+
+function idleCmd(): InputCmd {
+  return {
+    seq: 0, mx: 0, up: false, dn: false, jump: false, sprint: false, slot: 0,
+    aim: 0, fire: false, reload: false, heal: false, nade: false, rt: 0,
+  };
+}
+
+function blankState(loadout: Loadout, nadeType: NadeType): PlayerState {
+  return {
+    x: 0, y: 0, vx: 0, vy: 0, aim: 0, fuel: FUEL_MAX, regenWait: 0,
+    hp: MAX_HP, armor: 0, alive: false,
+    weapon: loadout[0], ammo: WEAPONS[loadout[0]].mag,
+    slots: [...loadout] as Loadout, slotIdx: 0,
+    ammoS: [WEAPONS[loadout[0]].mag, WEAPONS[loadout[1]].mag, WEAPONS[loadout[2]].mag],
+    magsS: [SPAWN_MAGS, SPAWN_MAGS, 0],
+    reload: 0, cd: 0, onGround: false,
+    bandage: 0, prime: 0, nades: NADE_COUNT, nadeLatch: false, jetU: false, jetD: false,
+    heat: 0, fireLatch: false, burst: 0, burstCd: 0, stall: 0, sinceBurst: 600,
+    apexY: 0, nadeType,
+  };
+}
+
+function validCmd(cmd: unknown): cmd is InputCmd {
+  if (typeof cmd !== 'object' || cmd === null) return false;
+  const c = cmd as Record<string, unknown>;
+  return Number.isFinite(c.seq) && Number.isFinite(c.aim) && Number.isFinite(c.rt)
+    && (c.mx === -1 || c.mx === 0 || c.mx === 1)
+    && typeof c.up === 'boolean' && typeof c.dn === 'boolean'
+    && typeof c.jump === 'boolean' && typeof c.sprint === 'boolean'
+    && typeof c.fire === 'boolean' && typeof c.reload === 'boolean'
+    && typeof c.heal === 'boolean' && typeof c.nade === 'boolean'
+    && Number.isInteger(c.slot) && (c.slot as number) >= 0 && (c.slot as number) <= 3;
+}
+
+// copy only the known fields so oversized junk on the wire is never retained
+function sanitizeCmd(c: InputCmd): InputCmd {
+  return {
+    seq: c.seq, mx: c.mx, up: c.up, dn: c.dn, jump: c.jump, sprint: c.sprint,
+    slot: c.slot, aim: c.aim, fire: c.fire, reload: c.reload, heal: c.heal,
+    nade: c.nade, rt: c.rt,
+  };
+}
+
+export class GameRoom {
+  tick = 0;
+  lagcomp = new LagComp();
+  events: GameEvent[] = [];
+  world = new World();
+
+  private players = new Map<number, ServerPlayer>();
+  private nades: Nade[] = [];
+  private fires: FirePatch[] = [];
+  private bullets: Bullet[] = [];
+  private nextId = 1;
+  private nextPingId = 1;
+  private nextNadeId = 1;
+  private roundLen = (Number(process.env.ROUND_SECS) || 0) * 60 || ROUND_TICKS;
+  private roundEnd = this.roundLen;
+  private interEnd = 0;      // >0: intermission until this tick
+  private botAcc = 0.2;        // fraction of bot shots aimed true
+  private botReactTicks = 48;  // sight time before firing (48 = 800 ms)
+
+  allPlayers(): Iterable<ServerPlayer> {
+    return this.players.values();
+  }
+
+  start(): void {
+    let next = performance.now();
+    const loop = (): void => {
+      const now = performance.now();
+      while (now >= next) {
+        this.step();
+        next += TICK_MS;
+        if (now - next > 1000) next = now;   // discard time after a long stall
+      }
+      setTimeout(loop, Math.max(0, next - performance.now()));
+    };
+    loop();
+  }
+
+  addConnection(ws: WebSocket, req: IncomingMessage): void {
+    const lag = process.env.ALLOW_LAG_SIM
+      ? Number(new URL(req.url ?? '/', 'http://localhost').searchParams.get('lag')) || 0
+      : 0;
+    const conn = new Conn(ws, lag);
+    let player: ServerPlayer | null = null;
+    // drop sockets that connect but never join
+    const joinDeadline = setTimeout(() => {
+      if (!player) conn.close();
+    }, 10_000);
+
+    conn.onMsg = (msg) => {
+      if (!player) {
+        if (msg.t !== 'join') return;
+        if (this.players.size >= MAX_PLAYERS) {
+          conn.send(JSON.stringify({ t: 'reject', reason: 'server is full' }));
+          conn.close();
+          return;
+        }
+        const loadout: Loadout = validLoadout(msg.loadout) ? msg.loadout : [...DEFAULT_LOADOUT];
+        const nadeType: NadeType = isNadeType(msg.nadeType) ? msg.nadeType : 'frag';
+        const name = this.uniqueName(sanitizeName(msg.name));
+        clearTimeout(joinDeadline);
+        player = this.createPlayer(conn, name, loadout, nadeType);
+        conn.send(JSON.stringify({
+          t: 'welcome', id: player.id, tick: this.tick, holes: this.world.holes,
+        }));
+        console.log(`[join] #${player.id} ${name} (${loadout.join('/')})${lag ? ` lag=${lag}ms` : ''} — ${this.players.size} online`);
+        return;
+      }
+
+      switch (msg.t) {
+        case 'in':
+          if (validCmd(msg.cmd) && msg.cmd.seq > player.lastQueuedSeq
+            && player.queue.length < INPUT_QUEUE_CAP) {
+            player.lastQueuedSeq = msg.cmd.seq;
+            player.queue.push(sanitizeCmd(msg.cmd));
+          }
+          break;
+        case 'respawn':
+          if (validLoadout(msg.loadout)) {
+            player.respawnLoadout = msg.loadout;
+            if (isNadeType(msg.nadeType)) player.respawnNade = msg.nadeType;
+            player.wantsRespawn = true;
+          }
+          break;
+        case 'pong': {
+          const sentAt = player.pings.get(msg.id);
+          if (sentAt !== undefined) {
+            player.pings.delete(msg.id);
+            const sample = performance.now() - sentAt;
+            player.rtt = player.rtt === 0 ? sample : player.rtt * 0.8 + sample * 0.2;
+          }
+          break;
+        }
+      }
+    };
+
+    conn.onClose = () => {
+      if (player) {
+        this.players.delete(player.id);
+        console.log(`[leave] #${player.id} ${player.name} — ${this.players.size} online`);
+      }
+    };
+  }
+
+  private createPlayer(conn: Conn, name: string, loadout: Loadout, nadeType: NadeType): ServerPlayer {
+    const p: ServerPlayer = {
+      id: this.nextId++,
+      name, conn, bot: null,
+      state: blankState(loadout, nadeType),
+      kills: 0, deaths: 0, assists: 0, dmg: 0, recent: [],
+      burnTicks: 0, burnBy: -1, blindTicks: 0,
+      queue: [], lastSeq: 0, lastQueuedSeq: 0, lastCmd: idleCmd(),
+      respawnAt: 0, wantsRespawn: false, respawnLoadout: loadout, respawnNade: nadeType,
+      protUntil: 0, rtt: 0, pings: new Map(),
+    };
+    this.players.set(p.id, p);
+    this.spawn(p, loadout, nadeType);
+    return p;
+  }
+
+  private uniqueName(base: string): string {
+    const taken = new Set([...this.players.values()].map((p) => p.name));
+    if (!taken.has(base)) return base;
+    for (let i = 2; ; i++) {
+      const candidate = `${base.slice(0, MAX_NAME_LEN - 1 - String(i).length)}·${i}`;
+      if (!taken.has(candidate)) return candidate;
+    }
+  }
+
+  private spawn(p: ServerPlayer, loadout: Loadout, nadeType?: NadeType): void {
+    const sp = this.pickSpawn();
+    Object.assign(p.state, blankState(loadout, nadeType ?? p.respawnNade), {
+      x: sp.x, y: sp.y, alive: true, onGround: true,
+    } satisfies Partial<PlayerState>);
+    p.protUntil = this.tick + SPAWN_PROTECT_TICKS;
+    p.wantsRespawn = false;
+    p.burnTicks = 0;
+    p.blindTicks = 0;
+  }
+
+  // Prefer the spawn point farthest from any living enemy.
+  private pickSpawn(): { x: number; y: number } {
+    let best = SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
+    let bestScore = -1;
+    for (const sp of SPAWN_POINTS) {
+      let minD = Infinity;
+      for (const p of this.players.values()) {
+        if (p.state.alive) minD = Math.min(minD, dist(sp.x, sp.y, p.state.x, p.state.y));
+      }
+      if (minD === Infinity) return best;   // empty server: random pick
+      const score = minD + Math.random() * 50;
+      if (score > bestScore) {
+        bestScore = score;
+        best = sp;
+      }
+    }
+    return best;
+  }
+
+  private step(): void {
+    this.tick++;
+
+    // round flow: play → 10 s frozen intermission with the scoreboard → reset
+    if (this.interEnd > 0) {
+      if (this.tick >= this.interEnd) {
+        this.interEnd = 0;
+        this.resetRound();
+      } else {
+        if (this.tick % PING_INTERVAL_TICKS === 0) this.sendPings();
+        if (this.tick % SNAPSHOT_EVERY === 0) this.broadcast();
+        return;                              // world is frozen
+      }
+    } else if (this.tick >= this.roundEnd) {
+      this.interEnd = this.tick + 600;       // 10 s to read the final board
+      this.bullets = [];
+      this.nades = [];
+      this.fires = [];
+      for (const p of this.players.values()) p.state.prime = 0;
+    }
+
+    if (this.tick % 60 === 0) this.manageBots();
+
+    // record positions entering this tick BEFORE applying inputs, so a shot
+    // resolved this tick can rewind to any tick up to and including this one
+    this.lagcomp.record(
+      this.tick,
+      [...this.players.values()].map((p) => ({
+        id: p.id, alive: p.state.alive, x: p.state.x, y: p.state.y,
+      })),
+    );
+
+    for (const p of this.players.values()) {
+      // bots synthesize one command per tick; humans consume their queue
+      // (draining two per tick when a backlog builds up)
+      const n = p.bot ? 1 : (p.queue.length > 6 ? 2 : 1);
+      for (let i = 0; i < n; i++) {
+        let cmd: InputCmd | undefined;
+        if (p.bot) {
+          cmd = this.botCmd(p);
+          p.lastSeq = cmd.seq;
+        } else {
+          cmd = p.queue.shift();
+          if (cmd) {
+            if (cmd.seq <= p.lastSeq) continue;
+            p.lastSeq = cmd.seq;
+            p.lastCmd = cmd;
+          } else {
+            // starved: repeat last movement but never re-fire
+            cmd = { ...p.lastCmd, fire: false, reload: false };
+          }
+        }
+        const res = stepPlayer(p.state, cmd, SOLIDS, this.world);
+        if (res.fired) fireBullets(this, p, cmd.rt, this.bullets);
+        if (res.threw) this.throwNade(p, NADES[p.state.nadeType].fuse - res.primeTicks);
+        if (res.handBoom) this.detonate(p.state.x, p.state.y, p, p.state.nadeType);
+        if (res.fellDmg > 0) {
+          this.events.push({
+            e: 'hit', victim: p.id, attacker: -1, dmg: res.fellDmg,
+            x: Math.round(p.state.x), y: Math.round(p.state.y),
+          });
+          if (p.state.hp <= 0 && p.state.alive) kill(this, p, p, 'fall');
+        }
+      }
+
+      if (p.bot && !p.state.alive && !p.wantsRespawn && Math.random() < 0.015) {
+        p.respawnLoadout = this.randomLoadout();
+        p.wantsRespawn = true;
+      }
+
+      // dying while priming drops the live grenade at your feet
+      if (!p.state.alive && p.state.prime > 0) {
+        this.nades.push({
+          id: this.nextNadeId++, x: p.state.x, y: p.state.y, vx: 0, vy: 0,
+          boomAt: this.tick + NADES[p.state.nadeType].fuse - p.state.prime,
+          owner: p.id, kind: p.state.nadeType,
+        });
+        p.state.prime = 0;
+      }
+
+      if (!p.state.alive && p.wantsRespawn && this.tick >= p.respawnAt) {
+        this.spawn(p, p.respawnLoadout, p.respawnNade);
+      }
+    }
+
+    this.stepNades();
+    this.stepFires();
+    stepBullets(this, this.bullets);
+
+    if (this.tick % PING_INTERVAL_TICKS === 0) this.sendPings();
+    if (this.tick % SNAPSHOT_EVERY === 0) this.broadcast();
+  }
+
+  private throwNade(p: ServerPlayer, fuseLeft: number): void {
+    const st = p.state;
+    this.nades.push({
+      id: this.nextNadeId++,
+      x: st.x + Math.cos(st.aim) * 14,
+      y: st.y - 4 + Math.sin(st.aim) * 14,
+      vx: Math.cos(st.aim) * NADE_THROW_SPEED * NADES[st.nadeType].throwMult + st.vx * 0.4,
+      vy: Math.sin(st.aim) * NADE_THROW_SPEED * NADES[st.nadeType].throwMult + st.vy * 0.4,
+      boomAt: this.tick + Math.max(1, fuseLeft),
+      owner: p.id,
+      kind: st.nadeType,
+    });
+  }
+
+  private detonate(x: number, y: number, owner: ServerPlayer | null, kind: NadeType): void {
+    if (kind === 'frag') {
+      this.world.addHole(x, y, NADE_HOLE_R);
+      this.events.push({
+        e: 'boom', x: Math.round(x), y: Math.round(y), r: NADE_HOLE_R,
+        by: owner?.id ?? -1,
+      });
+      explode(this, x, y, owner as CombatPlayer | null);
+      // shockwave: anyone airborne inside twice the damage radius is shoved
+      for (const q of this.players.values()) {
+        if (!q.state.alive || q.state.onGround || this.tick < q.protUntil) continue;
+        const d = dist(x, y, q.state.x, q.state.y);
+        if (d < NADE_SHOCK_R && d > 1) {
+          const k = NADE_SHOCK_PUSH * (1 - d / NADE_SHOCK_R);
+          q.state.vx += ((q.state.x - x) / d) * k;
+          q.state.vy += ((q.state.y - y) / d) * k;
+        }
+      }
+      return;
+    }
+    if (kind === 'flash') {
+      this.events.push({ e: 'flash', x: Math.round(x), y: Math.round(y), owner: owner?.id ?? -1 });
+      for (const q of this.players.values()) {
+        if (!q.state.alive) continue;
+        const d = dist(x, y, q.state.x, q.state.y);
+        if (d < FLASH_RADIUS) {
+          const self = q.id === owner?.id ? 0.5 : 1;    // throwers brace for it
+          // facing away from the bang halves it too
+          const away = Math.cos(q.state.aim) * (x - q.state.x) < 0 ? 0.5 : 1;
+          const t = Math.round(FLASH_BLIND_SECS * TICK_RATE * (1 - d / FLASH_RADIUS) * self * away);
+          q.blindTicks += t;    // repeat flashes stack
+        }
+      }
+      return;
+    }
+    // napalm: douse anyone close, then splash fire onto the terrain below
+    for (const v of this.players.values()) {
+      if (!v.state.alive || this.tick < v.protUntil) continue;
+      if (Math.hypot(v.state.x - x, v.state.y - y) < FIRE_PATCH_R * 2.2) {
+        v.burnTicks = Math.max(v.burnTicks, NAPALM_DIRECT_TICKS);
+        v.burnBy = owner?.id ?? -1;
+      }
+    }
+    for (let k = -4; k <= 4; k++) {
+      const fx = x + k * 46;
+      let fy = y;
+      for (let step = 0; step < 40; step++) {           // let the fire fall
+        if (this.world.solidAt(fx, fy + 12)) break;
+        fy += 12;
+      }
+      this.fires.push({ x: fx, y: fy, until: this.tick + FIRE_PATCH_TICKS, owner: owner?.id ?? -1 });
+    }
+  }
+
+  // napalm pools: expire, ignite anyone standing in them, tick burn damage
+  private stepFires(): void {
+    this.fires = this.fires.filter((f) => this.tick < f.until);
+    for (const p of this.players.values()) {
+      if (p.blindTicks > 0) p.blindTicks--;
+      const st = p.state;
+      if (!st.alive) {
+        p.burnTicks = 0;
+        continue;
+      }
+      let inFire = false;
+      for (const f of this.fires) {
+        if (Math.abs(st.x - f.x) < FIRE_PATCH_R + PLAYER_HW
+          && Math.abs(st.y - f.y) < FIRE_PATCH_R + PLAYER_HH) {
+          inFire = true;
+          if (this.tick >= p.protUntil) {
+            p.burnTicks = Math.max(p.burnTicks, AFTERBURN_TICKS);
+            p.burnBy = f.owner;
+          }
+        }
+      }
+      if (p.burnTicks > 0) {
+        if (!inFire) p.burnTicks--;
+        applyDamage(st, BURN_DPS * DT);
+        if (Math.floor((st.hp + BURN_DPS * DT) / 5) !== Math.floor(st.hp / 5)) {
+          // sparse hit events so damage numbers don't spam every tick
+          this.events.push({
+            e: 'hit', victim: p.id, attacker: p.burnBy, dmg: 5,
+            x: Math.round(st.x), y: Math.round(st.y),
+          });
+        }
+        if (st.hp <= 0 && st.alive) {
+          const owner = this.players.get(p.burnBy) ?? p;
+          kill(this, owner, p, 'fire');
+          p.burnTicks = 0;
+        }
+      }
+    }
+  }
+
+  private stepNades(): void {
+    for (let i = this.nades.length - 1; i >= 0; i--) {
+      const n = this.nades[i];
+      if (this.tick >= n.boomAt) {
+        this.nades.splice(i, 1);
+        this.detonate(n.x, n.y, this.players.get(n.owner) ?? null, n.kind);
+        continue;
+      }
+      // ballistic bounce against terrain (point-sized, hole-aware)
+      n.vy = Math.min(n.vy + GRAVITY * DT, MAX_FALL_SPEED);
+      const nx = n.x + n.vx * DT;
+      if (this.world.solidAt(nx, n.y)) {
+        n.vx = -n.vx * NADE_BOUNCE;
+      } else {
+        n.x = nx;
+      }
+      const ny = n.y + n.vy * DT;
+      if (this.world.solidAt(n.x, ny)) {
+        n.vy = -n.vy * NADE_BOUNCE;
+        n.vx *= 0.7;
+        if (Math.abs(n.vy) < 40) n.vy = 0;
+      } else {
+        n.y = ny;
+      }
+    }
+  }
+
+  // Round over: fill the craters, wipe scores, and redeploy everyone.
+  private resetRound(): void {
+    this.roundEnd = this.tick + this.roundLen;
+    this.world.setHoles([]);
+    this.nades = [];
+    this.fires = [];
+    this.events.push({ e: 'reset' });
+    for (const p of this.players.values()) {
+      p.kills = 0;
+      p.deaths = 0;
+      p.assists = 0;
+      p.dmg = 0;
+      p.recent = [];
+      this.spawn(p, [...p.state.slots] as Loadout);
+    }
+    console.log('[round] map reset');
+  }
+
+  private randomNade(): NadeType {
+    const kinds: NadeType[] = ['frag', 'flash', 'napalm'];
+    return kinds[Math.floor(Math.random() * kinds.length)];
+  }
+
+  private randomLoadout(): Loadout {
+    const pick = (arr: readonly WeaponId[]): WeaponId =>
+      arr[Math.floor(Math.random() * arr.length)];
+    return [pick(SLOT_OPTIONS[0]), pick(SLOT_OPTIONS[1]), pick(SLOT_OPTIONS[2])];
+  }
+
+  // Keep the arena populated: at least MIN_PLAYERS combatants, bots making
+  // up the difference and rotating out one per second as humans join.
+  // difficulty tracks the humans' average K/D this round: easy (20% accuracy,
+  // 800 ms reaction) at K/D <= 1, very hard (60%, 400 ms) at K/D >= 5
+  private updateBotAim(): void {
+    let sum = 0;
+    let humans = 0;
+    for (const p of this.players.values()) {
+      if (p.bot) continue;
+      humans++;
+      sum += p.kills / Math.max(1, p.deaths);
+    }
+    const kd = humans > 0 ? sum / humans : 0;
+    const t = Math.min(1, Math.max(0, (kd - 1) / 4));
+    this.botAcc = 0.2 + 0.4 * t;
+    this.botReactTicks = Math.round(48 - 24 * t);
+  }
+
+  // ---- bot navigation: coarse grid + A*, bots patrol map edge to edge
+  private navReady = false;
+  private navCols = 0;
+  private navRows = 0;
+  private nav!: Uint8Array;
+
+  private buildNav(): void {
+    const C = 80;
+    this.navCols = Math.ceil(WORLD_W / C);
+    this.navRows = Math.ceil(WORLD_H / C);
+    this.nav = new Uint8Array(this.navCols * this.navRows);
+    for (let cy = 0; cy < this.navRows; cy++) {
+      for (let cx = 0; cx < this.navCols; cx++) {
+        const x = cx * C + C / 2;
+        const y = cy * C + C / 2;
+        const blocked = SOLIDS.some((r) =>
+          x > r.x - 20 && x < r.x + r.w + 20 && y > r.y - 30 && y < r.y + r.h + 30);
+        this.nav[cy * this.navCols + cx] = blocked ? 1 : 0;
+      }
+    }
+    this.navReady = true;
+  }
+
+  private navCell(x: number, y: number): [number, number] {
+    const C = 80;
+    let cx = Math.max(0, Math.min(this.navCols - 1, Math.floor(x / C)));
+    let cy = Math.max(0, Math.min(this.navRows - 1, Math.floor(y / C)));
+    // nudge onto a passable cell if we're inside a wall margin
+    for (let r2 = 0; r2 < 6 && this.nav[cy * this.navCols + cx]; r2++) {
+      for (const [ox, oy] of [[1, 0], [-1, 0], [0, -1], [0, 1]] as const) {
+        const nx = cx + ox * (r2 + 1), ny = cy + oy * (r2 + 1);
+        if (nx >= 0 && nx < this.navCols && ny >= 0 && ny < this.navRows
+          && !this.nav[ny * this.navCols + nx]) { cx = nx; cy = ny; break; }
+      }
+    }
+    return [cx, cy];
+  }
+
+  private findPath(x0: number, y0: number, x1: number, y1: number): { x: number; y: number }[] {
+    if (!this.navReady) this.buildNav();
+    const C = 80;
+    const cols = this.navCols, rows = this.navRows;
+    const [sx, sy] = this.navCell(x0, y0);
+    const [tx, ty] = this.navCell(x1, y1);
+    const n = cols * rows;
+    const g = new Float64Array(n).fill(Infinity);
+    const from = new Int32Array(n).fill(-1);
+    const open = new Set<number>();
+    const si = sy * cols + sx, ti = ty * cols + tx;
+    g[si] = 0;
+    open.add(si);
+    const hf = (i: number): number => {
+      const cy2 = Math.floor(i / cols), cx2 = i % cols;
+      return Math.hypot(cx2 - tx, cy2 - ty);
+    };
+    let guard = 0;
+    while (open.size > 0 && guard++ < 30000) {
+      let best = -1, bestF = Infinity;
+      for (const i of open) {
+        const f = g[i] + hf(i);
+        if (f < bestF) { bestF = f; best = i; }
+      }
+      if (best === ti) break;
+      open.delete(best);
+      const bx2 = best % cols, by2 = Math.floor(best / cols);
+      for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const) {
+        const nx = bx2 + ox, ny = by2 + oy;
+        if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+        const ni = ny * cols + nx;
+        if (this.nav[ni]) continue;
+        const ng = g[best] + Math.hypot(ox, oy);
+        if (ng < g[ni]) {
+          g[ni] = ng;
+          from[ni] = best;
+          open.add(ni);
+        }
+      }
+    }
+    if (from[ti] === -1 && ti !== si) return [];
+    const out: { x: number; y: number }[] = [];
+    for (let i = ti; i !== -1; i = from[i]) {
+      out.push({ x: (i % cols) * C + C / 2, y: Math.floor(i / cols) * C + C / 2 });
+      if (i === si) break;
+    }
+    out.reverse();
+    // keep every other waypoint to smooth the path
+    return out.filter((_, k) => k % 2 === 0 || k === out.length - 1);
+  }
+
+  private manageBots(): void {
+    if (process.env.NOBOTS) return;
+    this.updateBotAim();
+    let humans = 0;
+    const bots: ServerPlayer[] = [];
+    for (const p of this.players.values()) {
+      if (p.bot) bots.push(p);
+      else humans++;
+    }
+    const want = Math.max(0, MIN_PLAYERS - humans);
+    if (bots.length < want && this.players.size < MAX_PLAYERS) {
+      this.createBot();
+    } else if (bots.length > want) {
+      const out = bots.find((b) => !b.state.alive) ?? bots[bots.length - 1];
+      this.players.delete(out.id);
+      console.log(`[bot] ${out.name} rotated out — ${this.players.size} online`);
+    }
+  }
+
+  private createBot(): void {
+    const loadout = this.randomLoadout();
+    const taken = new Set([...this.players.values()].map((q) => q.name));
+    const alias = BOT_NAMES.find((n) => !taken.has(`(B) ${n}`));
+    const p: ServerPlayer = {
+      id: this.nextId++,
+      name: alias ? `(B) ${alias}` : this.uniqueName(`(B) Outlaw ${this.nextId}`),
+      conn: null,
+      bot: { mx: 1, up: false, jump: false, nadeHold: 0, losTicks: 0, wasFalling: false, flareSkip: false, path: [], wpi: 0, goalRight: Math.random() < 0.5, stuck: 0, seq: 0 },
+      state: blankState(loadout, this.randomNade()),
+      kills: 0, deaths: 0, assists: 0, dmg: 0, recent: [],
+      burnTicks: 0, burnBy: -1, blindTicks: 0,
+      queue: [], lastSeq: 0, lastQueuedSeq: 0, lastCmd: idleCmd(),
+      respawnAt: 0, wantsRespawn: false, respawnLoadout: loadout,
+      respawnNade: this.randomNade(),
+      protUntil: 0, rtt: 0, pings: new Map(),
+    };
+    this.players.set(p.id, p);
+    this.spawn(p, loadout);
+    console.log(`[bot] ${p.name} deployed — ${this.players.size} online`);
+  }
+
+  private botCmd(p: ServerPlayer): InputCmd {
+    const b = p.bot!;
+    if (Math.random() < 0.02) b.mx = ([-1, 0, 1] as const)[Math.floor(Math.random() * 3)];
+    if (Math.random() < 0.03) b.up = !b.up;
+    if (Math.random() < 0.02) b.jump = !b.jump;
+
+    let aim = p.state.aim;
+    let fire = false;
+    let near = false;
+    let bd = Infinity, bx = 0, by = 0;
+    for (const o of this.players.values()) {
+      if (o.id === p.id || !o.state.alive) continue;
+      // bots see what a player would: a wide 16:9 window, so generous
+      // horizontally but restricted vertically
+      if (Math.abs(o.state.x - p.state.x) > 1150) continue;
+      if (Math.abs(o.state.y - p.state.y) > 640) continue;
+      const d = dist(p.state.x, p.state.y, o.state.x, o.state.y);
+      if (d < bd) { bd = d; bx = o.state.x; by = o.state.y; }
+    }
+    if (bd < Infinity) {
+      // aim at the lower torso — bots never go for the head. botAcc of the
+      // shots track true; the rest are flung wide.
+      const miss = Math.random() < this.botAcc ? 0.02 : 0.12 + Math.random() * 0.22;
+      aim = Math.atan2(by + 10 - p.state.y, bx - p.state.x)
+        + (Math.random() < 0.5 ? -1 : 1) * miss;
+      // hold fire without line of sight or beyond effective range
+      let clear = true;
+      if (clear) {
+        const dx = (bx - p.state.x) / bd;
+        const dy = (by - p.state.y) / bd;
+        const tWall = rayVsSolids(p.state.x, p.state.y, dx, dy, SOLIDS, bd, this.world);
+        clear = tWall === null || tWall >= bd - PLAYER_HW;
+      }
+      // fire only after the difficulty-scaled sight time, never while flashed
+      b.losTicks = clear ? b.losTicks + 1 : 0;
+      fire = clear && b.losTicks >= this.botReactTicks && p.blindTicks === 0
+        && Math.random() < 0.55;
+      near = bd < 900;
+    }
+    if (b.nadeHold === 0 && near && Math.random() < 0.002) {
+      b.nadeHold = 40 + Math.floor(Math.random() * 60);
+    }
+    if (b.nadeHold > 0) b.nadeHold--;
+
+    p.state.magsS = [3, 3, 0];   // bots don't manage their ammo economy
+
+    // flare the jets before a hard landing — unless a nearby firefight
+    // has their attention this fall
+    const fastFall = !p.state.onGround && p.state.vy > 900;
+    if (fastFall && !b.wasFalling) b.flareSkip = near && Math.random() < 0.35;
+    b.wasFalling = fastFall;
+    const flare = fastFall && !b.flareSkip && p.state.fuel > 2;
+
+    // patrol: march between random points near the two map edges (A*),
+    // pausing to fight whatever crosses the route
+    if (bd === Infinity) {
+      if (b.wpi >= b.path.length) {
+        const gx = b.goalRight ? WORLD_W - 250 - Math.random() * 300 : 250 + Math.random() * 300;
+        const gy = 400 + Math.random() * (WORLD_H - 900);
+        b.path = this.findPath(p.state.x, p.state.y, gx, gy);
+        b.wpi = 0;
+        b.goalRight = !b.goalRight;
+      }
+      const wp = b.path[b.wpi];
+      if (wp) {
+        const dx = wp.x - p.state.x;
+        const dy = wp.y - p.state.y;
+        if (Math.hypot(dx, dy) < 100) b.wpi++;
+        b.mx = dx > 30 ? 1 : dx < -30 ? -1 : 0;
+        b.up = dy < -50;
+        b.jump = p.state.onGround && Math.abs(p.state.vx) < 20 && b.mx !== 0;
+        // going nowhere: give up on this path and replan
+        if (Math.abs(p.state.vx) < 8 && Math.abs(p.state.vy) < 8) {
+          if (++b.stuck > 120) { b.path = []; b.wpi = 0; b.stuck = 0; }
+        } else b.stuck = 0;
+      }
+    }
+
+    return {
+      seq: ++b.seq, mx: b.mx, up: b.up || flare, dn: false, jump: b.jump,
+      sprint: false, slot: 0, aim,
+      fire: fire && b.nadeHold === 0,
+      reload: false,
+      heal: false,     // bots never bandage
+      nade: b.nadeHold > 0,
+      rt: this.tick,
+    };
+  }
+
+  private sendPings(): void {
+    for (const p of this.players.values()) {
+      if (!p.conn) continue;
+      const id = this.nextPingId++;
+      p.pings.set(id, performance.now());
+      if (p.pings.size > 8) {
+        p.pings.delete(p.pings.keys().next().value!);   // drop the stalest
+      }
+      p.conn!.send(JSON.stringify({ t: 'ping', id }));
+    }
+  }
+
+  private broadcast(): void {
+    const players: NetPlayer[] = [...this.players.values()].map((p) => ({
+      ...p.state,
+      id: p.id, name: p.name, kills: p.kills, deaths: p.deaths, assists: p.assists, dmg: p.dmg,
+      burn: p.burnTicks > 0,
+      dizzy: p.blindTicks > 0,
+      rtt: Math.round(p.rtt), prot: this.tick < p.protUntil,
+    }));
+    const nades: NetNade[] = this.nades.map((n) => ({
+      id: n.id, x: Math.round(n.x), y: Math.round(n.y),
+      vx: Math.round(n.vx), vy: Math.round(n.vy),
+      f: n.boomAt - this.tick, k: n.kind,
+    }));
+    const fires: NetFire[] = this.fires.map((f) => ({
+      x: Math.round(f.x), y: Math.round(f.y),
+    }));
+    // identical payload for everyone except the per-client input ack
+    const rest = `"players":${JSON.stringify(players)},"nades":${JSON.stringify(nades)},"fires":${JSON.stringify(fires)},"events":${JSON.stringify(this.events)}}`;
+    for (const p of this.players.values()) {
+      if (!p.conn) continue;
+      p.conn.send(`{"t":"snap","tick":${this.tick},"ack":${p.lastSeq},"round":${Math.max(0, this.roundEnd - this.tick)},"inter":${this.interEnd > 0 ? this.interEnd - this.tick : 0},${rest}`);
+    }
+    this.events = [];
+  }
+}
