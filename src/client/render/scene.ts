@@ -30,6 +30,7 @@ let ATLAS: SoldierAtlas | null = null;
 
 // unique AI facade per skyline building (atlas of FACADE_N cells)
 let FACADES: Texture | null = null;
+let FACADE_ASPECTS: number[] | null = null;
 const FACADE_COLS = 12;
 const FACADE_ROWS = 4;
 const FACADE_N = 48;
@@ -115,6 +116,9 @@ export function ensureTextures(r: Renderer): SceneTex {
     upgradeTex(r, '/tex/planet.png', false, (t) => { TEX!.planet = t; });
     upgradeTex(r, '/tex/guns.png', false, (t) => { TEX!.soldier = t; });
     upgradeTex(r, '/tex/facades.png', false, (t) => { FACADES = t; });
+    fetch('/tex/facades.json').then((res) => res.json())
+      .then((a: number[]) => { FACADE_ASPECTS = a; })
+      .catch(() => {});
     // pre-bake the standard camo set so new players don't hitch mid-fight
     for (let i = 0; i < CAMO_COUNT; i++) {
       const v = buildBodyVariant(i);
@@ -325,70 +329,47 @@ function drawCity(
     const body = mix(dark, lit, b.tone * 0.5);
     const bodyDark = mix(body, [0, 0, 0], 0.55);
     const h = WORLD_H + 500 - b.top;
-    const facade = !simple && FACADES;
+    const facade = !simple && FACADES && FACADE_ASPECTS;
+    let topV = b.top;
     if (facade) {
-      // each building gets its own photoreal face, tiled at a fixed world
-      // scale so the texture never stretches to the building's shape
+      // the building takes its shape from the texture: ONE quad at the
+      // facade's true aspect, transparent sky showing the real nebula
       const ci = Math.abs(Math.round(b.x * 0.73 + b.w * 13)) % FACADE_N;
+      const aspect = FACADE_ASPECTS![ci] || 0.5;
+      const bh = Math.min(1400, b.w / aspect);
+      // feet just below the horizon line so the full facade reads as skyline
+      topV = WORLD_H + 80 - bh;
       const cu = (ci % FACADE_COLS) / FACADE_COLS;
       const cv = Math.floor(ci / FACADE_COLS) / FACADE_ROWS;
       const tint = mix(lit, [1, 1, 1], 0.45);
-      const tintB = mix(tint, [0, 0, 0], 0.6);
       r.setTexture(FACADES);
-      const drawTiled = (x: number, y: number, w2: number, h2: number): void => {
-        const TILE_W = 220;                       // world units per facade cell
-        const TILE_H = 440;
-        // top row shows the full cell (transparent rooftop silhouette);
-        // rows below repeat the solid lower half so alpha never gaps
-        const SUB_V0 = 0.55;
-        const SUB_H = TILE_H * (1 - SUB_V0);
-        let ty = 0;
-        while (ty < h2) {
-          const first = ty === 0;
-          const rowH = first ? Math.min(TILE_H, h2) : Math.min(SUB_H, h2 - ty);
-          const v0 = first ? 0 : SUB_V0;
-          const v1 = first ? rowH / TILE_H : SUB_V0 + (rowH / TILE_H);
-          const rowTop = mix(tint, tintB, ty / h2);
-          const rowBot = mix(tint, tintB, Math.min(1, (ty + rowH) / h2));
-          for (let tx3 = 0; tx3 < w2; tx3 += TILE_W) {
-            const tw = Math.min(TILE_W, w2 - tx3);
-            r.texQuadUV(x + tx3, y + ty, tw, rowH,
-              cu, cv + v0 / FACADE_ROWS,
-              cu + (tw / TILE_W) / FACADE_COLS,
-              cv + v1 / FACADE_ROWS,
-              rowTop, rowBot);
-          }
-          ty += rowH;
-        }
-      };
-      drawTiled(b.x, b.top, b.w, h);
-      if (b.tierW > 0) {
-        drawTiled(b.x + (b.w - b.tierW) / 2, b.top - b.tierH, b.tierW, b.tierH);
-      }
+      r.texQuadUV(b.x, topV, b.w, bh,
+        cu, cv, cu + 1 / FACADE_COLS, cv + 1 / FACADE_ROWS,
+        tint, mix(tint, [0, 0, 0], 0.6));
       r.setTexture(null);
     } else {
       r.gradQuad(b.x, b.top, b.w, h, body, bodyDark);
     }
     // muted roofline + soft glow (dimmer than playable platform strips)
-    r.gradQuad(b.x, b.top - 22, b.w, 22, [ACCENT[0], ACCENT[1], ACCENT[2]], ACCENT, 0, simple ? 0.08 : 0.16);
-    r.quad(b.x, b.top, b.w, 2, mix(ACCENT, dark, 0.35), simple ? 0.3 : 0.55);
+    r.gradQuad(b.x, topV - 22, b.w, 22, [ACCENT[0], ACCENT[1], ACCENT[2]], ACCENT, 0, simple ? 0.08 : 0.16);
+    r.quad(b.x, topV, b.w, 2, mix(ACCENT, dark, 0.35), simple ? 0.3 : 0.55);
     if (simple) continue;
 
     // setback upper tier with its own roofline
     if (b.tierW > 0 && !facade) {
       const tx = b.x + (b.w - b.tierW) / 2;
-      r.gradQuad(tx, b.top - b.tierH, b.tierW, b.tierH, mix(body, [1, 1, 1], 0.04), body);
-      r.quad(tx, b.top - b.tierH, b.tierW, 1.8, mix(ACCENT, dark, 0.3), 0.5);
+      r.gradQuad(tx, topV - b.tierH, b.tierW, b.tierH, mix(body, [1, 1, 1], 0.04), body);
+      r.quad(tx, topV - b.tierH, b.tierW, 1.8, mix(ACCENT, dark, 0.3), 0.5);
       for (let wy = 12; wy < b.tierH - 10; wy += 27) {
         for (let wx = 6; wx < b.tierW - 8; wx += 19) {
           if ((wx * 13 + wy * 7 + b.x) % 11 < 3.5) {
-            r.quad(tx + wx, b.top - b.tierH + wy, 4.5, 6.5, [0.55, 0.85, 1.0], 0.28);
+            r.quad(tx + wx, topV - b.tierH + wy, 4.5, 6.5, [0.55, 0.85, 1.0], 0.28);
           }
         }
       }
     }
     // rooftop props
-    const roofY = b.tierW > 0 ? b.top - b.tierH : b.top;
+    const roofY = b.tierW > 0 && !facade ? topV - b.tierH : topV;
     const roofX = b.tierW > 0 ? b.x + (b.w - b.tierW) / 2 : b.x;
     const roofW = b.tierW > 0 ? b.tierW : b.w;
     if (b.roofBox) {
@@ -405,7 +386,7 @@ function drawCity(
     for (const [wx, wy] of facade ? [] : b.windows) {
       const warm = (wx * 7 + wy) % 3 === 0;
       const c: RGB = warm ? [1.0, 0.75, 0.45] : [0.55, 0.85, 1.0];
-      r.quad(b.x + wx, b.top + wy, 4.5, 6.5, c, 0.30);
+      r.quad(b.x + wx, topV + wy, 4.5, 6.5, c, 0.30);
     }
     // glowing billboard with a slow flicker
     if (b.billboard) {
@@ -414,8 +395,8 @@ function drawCity(
       const flick = 0.75 + 0.25 * Math.sin(t * 7 + b.x) * Math.sin(t * 1.7 + bb.hue * 9);
       const bw = Math.min(b.w * 0.7, 64);
       const bx = b.x + (b.w - bw) / 2;
-      r.quad(bx - 2, b.top + bb.y - 2, bw + 4, bb.h + 4, [0.05, 0.05, 0.08]);
-      r.quad(bx, b.top + bb.y, bw, bb.h, c, 0.30 * flick);
+      r.quad(bx - 2, topV + bb.y - 2, bw + 4, bb.h + 4, [0.05, 0.05, 0.08]);
+      r.quad(bx, topV + bb.y, bw, bb.h, c, 0.30 * flick);
       // sign "text" bars
       for (let i = 0; i < 3; i++) {
         r.quad(bx + 5, b.top + bb.y + 6 + i * (bb.h - 10) / 3, bw * (0.5 + ((i * 37 + b.x) % 5) / 12), 3.5, c, 0.75 * flick);
