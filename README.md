@@ -108,8 +108,9 @@ freely, even two of the same) plus a sidearm:
 | 3 | M9 | 26 × 1 | 300 | 12 | accurate mobile fallback |
 | 3 | Pan | 100 swing | 80 | ∞ | lethal up close; shields your frontal torso while drawn, and your lower back while stowed |
 
-SMG rounds shed energy over distance — about 10% of listed damage remains at
-one screen-width. **Headshots deal 1.5× damage** (heads are large) and leg
+SMG rounds shed energy over distance — down to a quarter of listed damage by
+the edge of the screen; shotgun pellets drop to half by the end of their
+700-unit reach. **Headshots deal 1.5× damage** (heads are large) and leg
 hits 30% less, so aim for the chest. Your feet are your stability: shots
 fired standing on the ground have zero recoil bloom, while airborne spray
 blooms exponentially (SMGs heat at a third of the rifles' rate); hold **right-click** for a 2× magnifier

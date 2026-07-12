@@ -27,7 +27,7 @@ export interface WeaponDef {
   range?: number;              // max flight distance (default MAX_RANGE)
   burst?: BurstCfg;            // burst-only trigger group (MK47)
   melee?: { range: number; arcDeg: number };   // swung, not fired
-  falloff?: boolean;           // SMGs: damage decays to 10% across one screen
+  falloff?: { end: number; floor: number };   // damage decays linearly to floor at end
 }
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
@@ -45,7 +45,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     speed: 4800, heatPerShot: 0.1, heatMax: 4.0, heatDecay: 3,
     mag: 40, reloadSec: 0.43, moveMult: 1.0,
     color: [0.85, 1.0, 0.6],
-    muzzleLen: 44, falloff: true,
+    muzzleLen: 44, falloff: { end: 1100, floor: 0.25 },
   },
   mp5: {
     name: 'MP5', role: 'laser-stable — lightest touch, lighter hits',
@@ -53,7 +53,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     speed: 4800, heatPerShot: 0.1, heatMax: 4.0, heatDecay: 3,
     mag: 40, reloadSec: 0.43, moveMult: 1.0,
     color: [0.7, 1.0, 0.75],
-    muzzleLen: 42, falloff: true,
+    muzzleLen: 42, falloff: { end: 1100, floor: 0.25 },
   },
   mac10: {
     name: 'MAC-10', role: 'a 30-round sneeze — double rate, wild kick',
@@ -61,7 +61,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     speed: 4600, heatPerShot: 0.1, heatMax: 4.0, heatDecay: 3,
     mag: 30, reloadSec: 0.48, moveMult: 1.02,
     color: [1.0, 0.9, 0.5],
-    muzzleLen: 34, falloff: true,
+    muzzleLen: 34, falloff: { end: 1100, floor: 0.25 },
   },
   rifle: {
     name: 'M4A1', role: 'all-rounder — recoil builds as you spray',
@@ -77,7 +77,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     speed: 3600, heatPerShot: 0, heatMax: 0, heatDecay: 8,
     mag: 6, reloadSec: 1.3, moveMult: 0.9,
     color: [1.0, 0.6, 0.4],
-    muzzleLen: 42, range: 700,
+    muzzleLen: 42, range: 700, falloff: { end: 700, floor: 0.5 },
   },
   sniper: {
     name: 'M24 BOLT', role: 'one shot, one kill — 2 s between rounds',
@@ -164,13 +164,11 @@ export const SLOT_OPTIONS: [WeaponId[], WeaponId[], WeaponId[]] = [
 ];
 
 // SMG rounds shed energy fast: 100% up close → 10% one screen-width out
-export const FALLOFF_END = 2200;
-export const FALLOFF_MIN = 0.1;
-
 export function falloffMult(w: WeaponId, dist: number): number {
-  if (!WEAPONS[w].falloff) return 1;
-  const t = Math.min(1, dist / FALLOFF_END);
-  return 1 - t * (1 - FALLOFF_MIN);
+  const f = WEAPONS[w].falloff;
+  if (!f) return 1;
+  const t = Math.min(1, dist / f.end);
+  return 1 - t * (1 - f.floor);
 }
 
 export const DEFAULT_LOADOUT: [WeaponId, WeaponId, WeaponId] = ['rifle', 'shotgun', 'pistol'];

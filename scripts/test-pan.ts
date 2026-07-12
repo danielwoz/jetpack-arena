@@ -107,14 +107,14 @@ all = scenario([2500, 1950], -3400, 'rear torso', false) && all;
   const lsOk = ls && ls.e === 'hit' && ls.dmg === 19;
   console.log(`${lsOk ? 'PASS' : 'FAIL'}  rifle legshot dmg=${ls && ls.e === 'hit' ? ls.dmg : '-'} (expect 19)`);
   all = !!lsOk && all;
-  // UMP at ~2000 units already flown: heavy falloff (21 → ~3)
+  // UMP at ~2000 units already flown: at the falloff floor (21 → ~5)
   victim.state.hp = 100;
   events.length = 0;
   const b2: Bullet[] = [{ x: 2100, y: 1950, vx: 2400, vy: 0, weapon: 'ump', owner: 1, rewindOff: 0, life: 1, dist: 2000, hit: [], spent: false }];
   for (let i = 0; i < 10 && b2.length; i++) stepBullets(cw, b2);
   const fo = events.find((e) => e.e === 'hit');
-  const foOk = fo && fo.e === 'hit' && fo.dmg <= 4 && fo.dmg >= 1;
-  console.log(`${foOk ? 'PASS' : 'FAIL'}  ump falloff dmg=${fo && fo.e === 'hit' ? fo.dmg : '-'} at 2000+ units (expect ~2-3)`);
+  const foOk = fo && fo.e === 'hit' && fo.dmg === 5;
+  console.log(`${foOk ? 'PASS' : 'FAIL'}  ump falloff dmg=${fo && fo.e === 'hit' ? fo.dmg : '-'} at 2000+ units (expect 5 = 25% floor)`);
   all = !!foOk && all;
 }
 // piercing: one rifle round drills through two targets in a line
