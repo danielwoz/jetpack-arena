@@ -11,6 +11,24 @@ function el<T extends HTMLElement>(id: string): T {
 }
 
 const SLOT_TITLES = ['SLOT 1 — PRIMARY', 'SLOT 2 — SECONDARY', 'SLOT 3 — SIDEARM'];
+let weaponIconAtlasReady = false;
+let weaponIconAtlasLoad: Promise<void> | null = null;
+const weaponIconUrls: Partial<Record<WeaponId, string>> = {};
+
+function ensureWeaponIconAtlas(): Promise<void> {
+  if (weaponIconAtlasReady) return Promise.resolve();
+  if (!weaponIconAtlasLoad) {
+    weaponIconAtlasLoad = import('./render/soldier.ts')
+      .then(({ buildGunIconDataUrls }) => {
+        Object.assign(weaponIconUrls, buildGunIconDataUrls(false));
+        weaponIconAtlasReady = true;
+      })
+      .catch(() => {
+        // Keep text-only placeholders if icon generation fails.
+      });
+  }
+  return weaponIconAtlasLoad;
+}
 
 function weaponTooltip(name: string, desc: string): string {
   return `${name} — ${desc}`;
@@ -100,11 +118,18 @@ function buildLoadoutPicker(container: HTMLElement, loadout: Loadout, sel: { nad
       const cards = new Map<WeaponId, HTMLElement>();
       for (const id of section.ids) {
         const w = WEAPONS[id];
+        const iconUrl = weaponIconUrls[id];
         const card = document.createElement('div');
         card.className = 'weapon-card' + (loadout[slot] === id ? ' selected' : '');
         card.title = weaponTooltip(w.name, w.role);
         card.setAttribute('aria-label', `${w.name}. ${w.role}. ${weaponStats(w)}`);
-        card.innerHTML = `<div class="wname">${w.name}</div>` + `<div class="wmeta">${weaponStats(w)}</div>`;
+        card.innerHTML =
+          `<div class="weapon-card-main"><div class="wname">${w.name}</div><div class="wmeta">${weaponStats(w)}</div></div>` +
+          `<div class="weapon-icon${iconUrl ? '' : ' pending'}" aria-hidden="true">${iconUrl ? '' : w.name.slice(0, 2)}</div>`;
+        if (iconUrl) {
+          const iconEl = card.querySelector<HTMLElement>('.weapon-icon');
+          if (iconEl) iconEl.style.backgroundImage = `url("${iconUrl}")`;
+        }
         card.addEventListener('click', () => {
           for (const c of cards.values()) c.classList.remove('selected');
           card.classList.add('selected');
@@ -122,7 +147,9 @@ function buildLoadoutPicker(container: HTMLElement, loadout: Loadout, sel: { nad
         card.className = 'weapon-card' + (sel.nade === kind ? ' selected' : '');
         card.title = weaponTooltip(n.name, n.desc);
         card.setAttribute('aria-label', `${n.name}. ${n.desc}. Fuse ${(n.fuse / 60).toFixed(0)} seconds.`);
-        card.innerHTML = `<div class="wname">${n.name}</div>` + `<div class="wmeta">FUSE ${(n.fuse / 60).toFixed(0)}s · COUNT 3</div>`;
+        card.innerHTML =
+          `<div class="weapon-card-main"><div class="wname">${n.name}</div><div class="wmeta">FUSE ${(n.fuse / 60).toFixed(0)}s · COUNT 3</div></div>` +
+          `<div class="weapon-icon nade-icon nade-${kind}" aria-hidden="true"><span class="nade-cap"></span><span class="nade-lever"></span></div>`;
         card.addEventListener('click', () => {
           for (const c of cards.values()) c.classList.remove('selected');
           card.classList.add('selected');
@@ -546,6 +573,14 @@ export class Ui {
 
     buildLoadoutPicker(this.joinWeapons, this.loadout, this.nadeSel);
     this.focusPickerSelected(this.joinWeapons, this.joinCursor);
+    void ensureWeaponIconAtlas().then(() => {
+      buildLoadoutPicker(this.joinWeapons, this.loadout, this.nadeSel);
+      this.focusPickerSelected(this.joinWeapons, this.joinCursor);
+      if (!this.death.classList.contains('hidden')) {
+        buildLoadoutPicker(this.deathWeapons, this.loadout, this.nadeSel);
+        this.focusPickerSelected(this.deathWeapons, this.deathCursor);
+      }
+    });
     this.normalizeJoinTabHeights();
     window.addEventListener('resize', () => this.normalizeJoinTabHeights());
     this.join.classList.add('ready');
