@@ -296,14 +296,36 @@ function makeJungle(seed: number, spanHalf: number, minH: number, maxH: number, 
       x,
       cell: Math.floor(r() * 64),
       h: minH + r() * (maxH - minH),
-      base: WORLD_H + 180 + r() * 420,
+      // deep enough that the base is never visible, even from the floor
+      base: WORLD_H + 700 + r() * 320,
     });
     x += gap * (0.55 + r() * 0.8);
   }
   return out;
 }
-const JUNGLE_FAR = makeJungle(11, 5200, 1500, 2400, 900);
-const JUNGLE_NEAR = makeJungle(23, 5600, 1100, 1900, 1300);
+const JUNGLE_FAR = makeJungle(11, 5200, 1900, 2800, 1050);
+
+// the hill silhouette the pandora map's collision steps approximate
+function hillTopCurve(x: number): number {
+  return 2770 + Math.sin(x * 0.0028) * 95 + Math.sin(x * 0.00093 + 2.1) * 75;
+}
+
+function drawPandoraHills(r: Renderer, left: number, right: number): void {
+  const S = 48;
+  const x0 = Math.max(0, Math.floor(left / S) * S - S);
+  const x1 = Math.min(WORLD_W, Math.ceil(right / S) * S + S);
+  r.setTexture(PD_GRASS);
+  for (let x = x0; x < x1; x += S) {
+    const ta = hillTopCurve(x + S / 2) - 12;
+    const tb = hillTopCurve(x + S + S / 2) - 12;
+    // texPoly's UVs are world-anchored, so the meadow tiles continuously
+    r.texPoly(new Float32Array([x, ta, x + S, tb, x + S, 3000, x, 3000]),
+      512, [0.72, 0.85, 0.66], [0.24, 0.36, 0.27], Math.min(ta, tb), 3000);
+    // sunlit crest lip following the slope
+    r.quad(x, ta, S, 5, [0.45, 0.85, 0.4], 0.45);
+  }
+  r.setTexture(null);
+}
 
 function drawPandoraSky(r: Renderer, cam: Camera): void {
   const alt = 1 - cam.y / WORLD_H;
@@ -328,9 +350,6 @@ function drawJungleLayer(r: Renderer, cam: Camera, layer: Flora[], f: number, di
     const c = cells[fl.cell % cells.length];
     const w = fl.h * c.aspect;
     r.texQuadUV(fl.x - w / 2, fl.base - fl.h, w, fl.h, c.u0, c.v0, c.u1, c.v1, tint, tintB);
-    // continue the trunk below the base so nothing floats
-    r.texQuadUV(fl.x - w / 2, fl.base, w, 1000,
-      c.u0, c.v1 - (c.v1 - c.v0) * 0.004, c.u1, c.v1, tintB, [0, 0, 0]);
   }
   r.setTexture(null);
 }
@@ -996,9 +1015,8 @@ function drawHoles(r: Renderer, left: number, right: number, topB: number, botto
       if (h.x + h.r < s.x || h.x - h.r > s.x + s.w) continue;
       if (h.y + h.r < s.y || h.y - h.r > s.y + s.h) continue;
       const sx0 = s.x, sy0 = s.y, sx1 = s.x + s.w, sy1 = s.y + s.h;
-      // scorched rim, then the void
-      drawHoleClipped(r, h.x, h.y, h.r, sx0, sy0, sx1, sy1, [0.05, 0.04, 0.08], 0.9);
-      drawHoleClipped(r, h.x, h.y, h.r * 0.82, sx0, sy0, sx1, sy1, [0.018, 0.015, 0.03], 1);
+      // scorched rim only — the crater itself is knocked out of the terrain
+      drawHoleClipped(r, h.x, h.y, h.r * 1.06, sx0, sy0, sx1, sy1, [0.05, 0.04, 0.08], 0.55);
       if (h.x >= sx0 && h.x <= sx1 && h.y >= sy0 && h.y <= sy1) centerInSolid = true;
     }
     // faint ember glow deep in craters that sit inside terrain
@@ -1044,8 +1062,7 @@ export function drawScene(
 
   if (pandoraReady()) {
     drawPandoraSky(r, cam);
-    drawJungleLayer(r, cam, JUNGLE_FAR, 0.10, 0.55);
-    drawJungleLayer(r, cam, JUNGLE_NEAR, 0.24, 0.85);
+    drawJungleLayer(r, cam, JUNGLE_FAR, 0.10, 0.7);
   } else {
   drawSky(r, cam, tex);
   drawStars(r, cam, t);
@@ -1064,8 +1081,35 @@ export function drawScene(
   // ground mist
   r.gradQuad(0, 2350, WORLD_W, 650, [0.2, 0.5, 0.55], [0.2, 0.5, 0.55], 0, 0.13);
 
+  // stencil the craters, then draw destructible terrain around them so the
+  // background genuinely shows through; indestructible rock draws unmasked
+  const anyHoles = world.holes.length > 0;
+  if (anyHoles) {
+    r.stencilWriteBegin();
+    for (const h of world.holes) {
+      if (h.x + h.r < left || h.x - h.r > right || h.y + h.r < topB || h.y - h.r > bottom) continue;
+      const segs = 22;
+      for (let i = 0; i < segs; i++) {
+        const a0 = (i / segs) * Math.PI * 2;
+        const a1 = ((i + 1) / segs) * Math.PI * 2;
+        r.tri(h.x, h.y,
+          h.x + Math.cos(a0) * h.r, h.y + Math.sin(a0) * h.r,
+          h.x + Math.cos(a1) * h.r, h.y + Math.sin(a1) * h.r,
+          [1, 1, 1], 1);
+      }
+    }
+    r.stencilWriteEnd('outside');
+  }
+  if (pandoraReady()) drawPandoraHills(r, left, right);
   for (const s of SOLIDS) {
-    if (s.k === 'wall') continue;
+    if (s.k === 'wall' || s.ind) continue;
+    if (s.x + s.w < left || s.x > right || s.y + s.h < topB || s.y > bottom) continue;
+    if (pandoraReady() && s.k === 'ground') continue;   // the hill strip covers these
+    drawSolid(r, s, t, tex);
+  }
+  if (anyHoles) r.clearStencil();
+  for (const s of SOLIDS) {
+    if (s.k === 'wall' || !s.ind) continue;
     if (s.x + s.w < left || s.x > right || s.y + s.h < topB || s.y > bottom) continue;
     drawSolid(r, s, t, tex);
   }

@@ -382,13 +382,13 @@ export class Ui {
     this.join.classList.add('hidden');
   }
 
-  showDeath(killerName: string | null): void {
+  showDeath(killerName: string | null, instant = false): void {
     buildLoadoutPicker(el('death-weapons'), this.loadout, this.nadeSel);
     this.deathMsg.textContent = killerName
       ? `ELIMINATED BY ${killerName.toUpperCase()}`
       : 'YOU DIED';
     this.death.classList.remove('hidden');
-    this.respawnReadyAt = performance.now() + RESPAWN_TICKS * TICK_MS;
+    this.respawnReadyAt = performance.now() + (instant ? 0 : RESPAWN_TICKS * TICK_MS);
     this.respawnBtn.disabled = true;
 
     clearInterval(this.countdownTimer);

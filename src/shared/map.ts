@@ -139,9 +139,10 @@ function buildPandora(): { solids: MapRect[]; spawns: { x: number; y: number }[]
     const top = Math.round(hillTop(x + STEP / 2));
     solids.push(r(x, top, STEP + 2, 2935 - top, 'ground'));
   }
-  // floating rock islands, aspect ~1.45 to match the sprite art
+  // floating rock islands: the hitbox is the wide upper body of the rock;
+  // the tapering underside of the sprite dangles below without collision
   const B = (x: number, y: number, w: number): void => {
-    solids.push(r(x, y, w, Math.round(w / 1.45), 'boulder'));
+    solids.push(r(x, y, w, Math.round(w / 2.4), 'boulder'));
   };
   // low hops
   B(500, 2380, 260); B(1450, 2300, 300); B(2400, 2420, 240); B(3300, 2280, 320);
@@ -154,13 +155,12 @@ function buildPandora(): { solids: MapRect[]; spawns: { x: number; y: number }[]
   B(6700, 1020, 320); B(300, 950, 260);
   // summit stones
   B(2100, 480, 220); B(3600, 380, 260); B(5100, 460, 230); B(6400, 400, 240);
-  // two rock spires rising from the hills
-  solids.push(r(1150, 1980, 150, 950, 'rock'));
-  solids.push(r(6050, 1900, 160, 1030, 'rock'));
-
   const spawns: { x: number; y: number }[] = [];
   for (const sx of [400, 1300, 2200, 3100, 4000, 4900, 5800, 6700, 7600]) {
-    spawns.push({ x: sx, y: Math.round(hillTop(sx)) - 28 });
+    // stand on the exact top of the step that contains this x
+    const step = Math.floor(sx / STEP) * STEP;
+    const top = Math.round(hillTop(step + STEP / 2));
+    spawns.push({ x: sx, y: top - 30 });
   }
   spawns.push({ x: 1600, y: 2272 }, { x: 5350, y: 2272 });
   return { solids, spawns };

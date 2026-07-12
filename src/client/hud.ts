@@ -33,6 +33,7 @@ export class Hud {
   private whiteout = el<HTMLDivElement>('whiteout');
   private lowfuel = el<HTMLDivElement>('lowfuel');
   private lowhp = el<HTMLDivElement>('lowhp');
+  private deathBannerEl = el<HTMLDivElement>('deathbanner');
   private crosshair = el<HTMLDivElement>('crosshair');
   private minimap = el<HTMLCanvasElement>('minimap');
   private minimapCtx = this.minimap.getContext('2d')!;
@@ -145,6 +146,11 @@ export class Hud {
       dot(p.x, p.y, 3.4, '#ff8a6a');
     }
     if (selfAlive) dot(selfX, selfY, 4.2, '#7dffb0');
+  }
+
+  deathBanner(text: string | null): void {
+    this.deathBannerEl.classList.toggle('hidden', text === null);
+    if (text !== null) this.deathBannerEl.textContent = text;
   }
 
   setStats(fps: number, rtt: number): void {

@@ -690,7 +690,7 @@ export class GameRoom {
       if (p.bot) bots.push(p);
       else humans++;
     }
-    const want = Math.max(0, MIN_PLAYERS - humans);
+    const want = Math.max(0, Math.round(TUNE.minPlayers) - humans);
     if (bots.length < want && this.players.size < MAX_PLAYERS) {
       this.createBot();
     } else if (bots.length > want) {

@@ -114,6 +114,9 @@ if (new URLSearchParams(location.search).has('atlas')) {
 let net: Net | null = null;
 let seq = 1;
 let shakeAmp = 0;
+let deathCamT = 0;
+let corpse: { x: number; y: number; vx: number; vy: number } | null = null;
+let pendingKiller: string | null = null;
 let spawnFade = 0;       // 1 → 0 over 2 s after spawning
 let spawnSeen = false;
 let started = false;
@@ -146,6 +149,7 @@ function onSnapshot(snap: Snapshot): void {
     if (!started) {
       started = true;
       setSceneTheme(net!.theme, renderer);
+      audio.setMusicTheme(net!.theme);
       ui.onAdmin = (patch) => net!.sendAdmin(patch);
       net!.onTune = () => ui.refreshAdmin();
       wasAlive = self.alive;
@@ -155,7 +159,13 @@ function onSnapshot(snap: Snapshot): void {
       requestAnimationFrame(frame);
     }
     if (wasAlive && !self.alive) {
-      ui.showDeath(lastKillerName);
+      // hold on the body for two seconds before the respawn screen
+      const st2 = predictor.state;
+      corpse = { x: st2?.x ?? self.x, y: st2?.y ?? self.y, vx: st2?.vx ?? 0, vy: -220 };
+      deathCamT = 2;
+      pendingKiller = lastKillerName;
+      hud.deathBanner(lastKillerName
+        ? `ELIMINATED BY ${lastKillerName.toUpperCase()}` : 'YOU DIED');
     } else if (!wasAlive && self.alive) {
       ui.hideDeath();
       camera.snapTo(self.x, self.y);
@@ -245,6 +255,7 @@ function handleEvents(snap: Snapshot): void {
         if (ev.map) {
           setMap(ev.map);
           setSceneTheme(ev.map, renderer);
+          audio.setMusicTheme(ev.map);
           hud.invalidateMinimap();
         }
         hud.announce('NEW ROUND');
@@ -355,6 +366,26 @@ function render(dtSec: number, alpha: number): void {
 
   const rx = lerp(predictor.prevX, st.x, alpha);
   const ry = lerp(predictor.prevY, st.y, alpha);
+  if (deathCamT > 0 && corpse) {
+    corpse.vy = Math.min(corpse.vy + 1500 * dtSec, 1300);
+    const nx = corpse.x + corpse.vx * dtSec;
+    const ny = corpse.y + corpse.vy * dtSec;
+    if (!world.solidAt(nx, ny + PLAYER_HH)) {
+      corpse.x = nx;
+      corpse.y = ny;
+    } else {
+      corpse.vx *= 0.6;   // settled on the ground
+      corpse.vy = 0;
+    }
+    camera.follow(corpse.x, corpse.y, dtSec);
+    deathCamT -= dtSec;
+    if (deathCamT <= 0) {
+      hud.deathBanner(null);
+      ui.showDeath(pendingKiller, true);
+      corpse = null;
+    }
+  }
+
   if (st.alive && !spawnSeen) spawnFade = 1;
   spawnSeen = st.alive;
   spawnFade = Math.max(0, spawnFade - dtSec / 2);

@@ -161,6 +161,27 @@ export class Renderer {
     gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
   }
 
+  // begin writing shapes into the stencil (nothing hits the color buffer)
+  stencilWriteBegin(): void {
+    const gl = this.gl;
+    this.flush();
+    gl.enable(gl.STENCIL_TEST);
+    gl.clearStencil(0);
+    gl.clear(gl.STENCIL_BUFFER_BIT);
+    gl.stencilFunc(gl.ALWAYS, 1, 0xff);
+    gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
+    gl.colorMask(false, false, false, false);
+  }
+
+  // subsequent draws land only where the stencil was (not) written
+  stencilWriteEnd(mode: 'inside' | 'outside'): void {
+    const gl = this.gl;
+    this.flush();
+    gl.colorMask(true, true, true, true);
+    gl.stencilFunc(gl.EQUAL, mode === 'inside' ? 1 : 0, 0xff);
+    gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+  }
+
   clearStencil(): void {
     this.flush();
     this.gl.disable(this.gl.STENCIL_TEST);

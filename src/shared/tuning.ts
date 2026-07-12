@@ -28,6 +28,7 @@ export const TUNE = {
   bandagesSpawn: 5,
   bandagesPerKill: 1,
   bandageHeal: 20,
+  minPlayers: 8,             // bot autofill target
   // bots (difficulty spectrum vs human K/D)
   botKdEasy: 1,
   botKdHard: 5,

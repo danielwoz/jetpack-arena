@@ -6,7 +6,10 @@ import type { World } from './world.ts';
 // Sample points across the player's body: 3 columns × 5 rows, slightly
 // inset. Pointwise tests agree exactly with the hole-aware material model,
 // so crater traversal can never disagree with collision.
-const BODY_SX = [-PLAYER_HW + 1, 0, PLAYER_HW - 1];
+// movement collides as a full 56×56 square so small blast craters can't
+// swallow a player; hit detection still uses the slim 28×56 damage box
+const COLLIDE_HW = PLAYER_HH;
+const BODY_SX = [-COLLIDE_HW + 1, -COLLIDE_HW / 2, 0, COLLIDE_HW / 2, COLLIDE_HW - 1];
 const BODY_SY = [-PLAYER_HH + 1, -PLAYER_HH / 2, 0, PLAYER_HH / 2, PLAYER_HH - 1];
 
 function bodySolid(

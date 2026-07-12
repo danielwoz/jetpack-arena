@@ -280,10 +280,44 @@ export class GameAudio {
     this.jetGain.gain.setTargetAtTime(target, this.ctx.currentTime, on ? 0.05 : 0.12);
   }
 
+  private musicNodes: AudioNode[] = [];
+  private musicTheme = 'city';
+  private pluckTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // swap the score to match the map: brooding for the city,
+  // calm and warm for pandora
+  setMusicTheme(theme: string): void {
+    const next = theme === 'pandora' ? 'pandora' : 'city';
+    if (next === this.musicTheme && this.musicOn) return;
+    this.musicTheme = next;
+    if (!this.musicOn) return;
+    this.stopMusicGraph();
+    this.buildMusicGraph();
+  }
+
+  private stopMusicGraph(): void {
+    if (this.pluckTimer) clearTimeout(this.pluckTimer);
+    this.pluckTimer = null;
+    for (const n of this.musicNodes) {
+      try { (n as OscillatorNode).stop?.(); } catch { /* already stopped */ }
+      n.disconnect();
+    }
+    this.musicNodes = [];
+  }
+
   // sinister soft ambience: two detuned drones under sparse minor plucks
   private startMusic(): void {
     if (this.musicOn || !this.ctx) return;
     this.musicOn = true;
+    this.buildMusicGraph();
+  }
+
+  private buildMusicGraph(): void {
+    if (!this.ctx) return;
+    if (this.musicTheme === 'pandora') {
+      this.buildPandoraMusic();
+      return;
+    }
     const ctx = this.ctx;
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
@@ -324,9 +358,59 @@ export class GameAudio {
         o.start(t);
         o.stop(t + 4.6);
       }
-      setTimeout(pluck, 3000 + Math.random() * 5000);
+      this.pluckTimer = setTimeout(pluck, 3000 + Math.random() * 5000);
     };
-    setTimeout(pluck, 2000);
+    this.pluckTimer = setTimeout(pluck, 2000);
+  }
+
+  // pandora: a warm slow major-pentatonic lullaby over airy pads
+  private buildPandoraMusic(): void {
+    const ctx = this.ctx!;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 700;
+    lp.connect(this.music);
+    this.musicNodes.push(lp);
+    for (const [f, g] of [[110, 0.045], [165, 0.028], [220.5, 0.02]] as const) {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const og = ctx.createGain();
+      og.gain.value = g;
+      o.connect(og);
+      og.connect(lp);
+      o.start();
+      this.musicNodes.push(o, og);
+    }
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.04;
+    const lfoG = ctx.createGain();
+    lfoG.gain.value = 240;
+    lfo.connect(lfoG);
+    lfoG.connect(lp.frequency);
+    lfo.start();
+    this.musicNodes.push(lfo, lfoG);
+
+    const SCALE_P = [220, 247.5, 277.2, 330, 371.25, 440];
+    const pluck = (): void => {
+      if (ctx.state === 'running' && this.musicTheme === 'pandora') {
+        const f = SCALE_P[Math.floor(Math.random() * SCALE_P.length)];
+        const t = ctx.currentTime;
+        const o = ctx.createOscillator();
+        o.type = 'triangle';
+        o.frequency.value = f;
+        const og = ctx.createGain();
+        og.gain.setValueAtTime(0.0001, t);
+        og.gain.exponentialRampToValueAtTime(0.055, t + 1.4);
+        og.gain.exponentialRampToValueAtTime(0.0001, t + 6);
+        o.connect(og);
+        og.connect(this.music);
+        o.start(t);
+        o.stop(t + 6.1);
+      }
+      this.pluckTimer = setTimeout(pluck, 4500 + Math.random() * 6000);
+    };
+    this.pluckTimer = setTimeout(pluck, 2500);
   }
 }
 
