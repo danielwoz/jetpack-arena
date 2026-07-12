@@ -58,6 +58,56 @@ export class World {
       return;
     }
     this.index(h);
+    this.compactAround(h);
+  }
+
+  // damage stays permanent, but redundant holes don't: circles contained in
+  // a neighbor are dropped, and heavy overlaps merge into one slightly
+  // larger circle (over-destroying a little is fine — holes only ever grow).
+  // Runs identically on server and every client, so the sims stay in step.
+  private compactAround(seed: { x: number; y: number; r: number }): void {
+    let h = seed;
+    let guard = 0;
+    while (guard++ < 8) {
+      let changed = false;
+      const x0 = Math.floor((h.x - h.r) / CELL);
+      const x1 = Math.floor((h.x + h.r) / CELL);
+      const y0 = Math.floor((h.y - h.r) / CELL);
+      const y1 = Math.floor((h.y + h.r) / CELL);
+      const cand = new Set<Hole>();
+      for (let cy = y0; cy <= y1; cy++) {
+        for (let cx = x0; cx <= x1; cx++) {
+          const arr = this.grid.get(World.key(cx, cy));
+          if (arr) for (const o of arr) cand.add(o);
+        }
+      }
+      for (const o of cand) {
+        if (o === h) continue;
+        const d = Math.hypot(o.x - h.x, o.y - h.y);
+        if (d + o.r <= h.r + 2) {
+          this.holes.splice(this.holes.indexOf(o), 1);
+          changed = true;
+        } else if (d + h.r <= o.r + 2) {
+          this.holes.splice(this.holes.indexOf(h), 1);
+          h = o;
+          changed = true;
+        } else {
+          // merge only near-total overlaps so the carved shape is preserved
+          const R = (d + h.r + o.r) / 2;
+          if (R <= Math.max(h.r, o.r) * 1.1) {
+            const t = d > 0 ? (R - h.r) / d : 0;
+            const merged = { x: h.x + (o.x - h.x) * t, y: h.y + (o.y - h.y) * t, r: R };
+            this.holes.splice(this.holes.indexOf(o), 1);
+            this.holes.splice(this.holes.indexOf(h), 1);
+            this.holes.push(merged);
+            h = merged;
+            changed = true;
+          }
+        }
+      }
+      if (!changed) break;
+      this.reindex();
+    }
   }
 
   // a narrow drilled channel: overlapping small holes along a direction

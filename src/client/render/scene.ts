@@ -991,25 +991,40 @@ function drawNades(r: Renderer, nades: RenderNade[], t: number): void {
 const holePoly = new Float32Array(48);
 
 
+// rim geometry is computed once per hole and cached — the terrain probes
+// were the frame-rate killer once craters piled up
+interface RimInfo { segs: number[]; ember: boolean }
+const RIM_CACHE = new WeakMap<object, RimInfo>();
+
+function rimFor(h: { x: number; y: number; r: number }): RimInfo {
+  let info = RIM_CACHE.get(h);
+  if (info) return info;
+  const segs: number[] = [];
+  const n = 26;
+  for (let i2 = 0; i2 < n; i2++) {
+    const a0 = (i2 / n) * Math.PI * 2;
+    const a1 = ((i2 + 1) / n) * Math.PI * 2;
+    const mid = (a0 + a1) / 2;
+    if (!world.solidAt(h.x + Math.cos(mid) * (h.r + 4), h.y + Math.sin(mid) * (h.r + 4))) continue;
+    segs.push(
+      h.x + Math.cos(a0) * (h.r + 1), h.y + Math.sin(a0) * (h.r + 1),
+      h.x + Math.cos(a1) * (h.r + 1), h.y + Math.sin(a1) * (h.r + 1),
+    );
+  }
+  info = { segs, ember: world.solidAt(h.x, h.y + h.r + 8) };
+  RIM_CACHE.set(h, info);
+  return info;
+}
+
 function drawHoles(r: Renderer, left: number, right: number, topB: number, bottom: number, t: number): void {
   for (const h of world.holes) {
     if (h.x + h.r < left || h.x - h.r > right || h.y + h.r < topB || h.y - h.r > bottom) continue;
-    // scorched edge: a thin ring drawn only where terrain still stands —
-    // the crater itself is genuinely knocked out, nothing overdraws it
-    const segs = 26;
-    for (let i2 = 0; i2 < segs; i2++) {
-      const a0 = (i2 / segs) * Math.PI * 2;
-      const a1 = ((i2 + 1) / segs) * Math.PI * 2;
-      const mid = (a0 + a1) / 2;
-      if (!world.solidAt(h.x + Math.cos(mid) * (h.r + 4), h.y + Math.sin(mid) * (h.r + 4))) continue;
-      r.line(
-        h.x + Math.cos(a0) * (h.r + 1), h.y + Math.sin(a0) * (h.r + 1),
-        h.x + Math.cos(a1) * (h.r + 1), h.y + Math.sin(a1) * (h.r + 1),
-        4, [0.05, 0.04, 0.08], 0.6,
-      );
+    const rim = rimFor(h);
+    for (let i2 = 0; i2 < rim.segs.length; i2 += 4) {
+      r.line(rim.segs[i2], rim.segs[i2 + 1], rim.segs[i2 + 2], rim.segs[i2 + 3],
+        4, [0.05, 0.04, 0.08], 0.6);
     }
-    // faint ember glow on the crater floor when it still has one
-    if (world.solidAt(h.x, h.y + h.r + 8)) {
+    if (rim.ember) {
       r.setAdditive(true);
       const gl = 0.04 + 0.025 * Math.sin(t * 2 + h.x * 0.05);
       r.glowDisc(h.x, h.y + h.r * 0.55, h.r * 0.55, [0.9, 0.4, 0.15], gl, 12);
