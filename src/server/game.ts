@@ -9,7 +9,7 @@ import {
   PLAYER_HH, PLAYER_HW, ROUND_TICKS, SNAPSHOT_EVERY, SPAWN_PROTECT_TICKS,
   TICK_MS, TICK_RATE, WORLD_H, WORLD_W,
 } from '../shared/constants.ts';
-import { SOLIDS, SPAWN_POINTS } from '../shared/map.ts';
+import { CURRENT_MAP, MAP_NAMES, SOLIDS, SPAWN_POINTS, setMap } from '../shared/map.ts';
 import { rayVsSolids } from '../shared/physics.ts';
 import { dist } from '../shared/math.ts';
 import { applyDamage, stepPlayer } from '../shared/step.ts';
@@ -162,6 +162,8 @@ export class GameRoom {
   }
 
   start(): void {
+    setMap(process.env.MAP ?? 'city');
+
     let next = performance.now();
     const loop = (): void => {
       const now = performance.now();
@@ -201,7 +203,7 @@ export class GameRoom {
         player = this.createPlayer(conn, name, loadout, nadeType);
         conn.send(JSON.stringify({
           t: 'welcome', id: player.id, tick: this.tick, holes: this.world.holes,
-          theme: process.env.THEME ?? 'city',
+          map: CURRENT_MAP,
           tune: tuneSnapshot(),
         }));
         console.log(`[join] #${player.id} ${name} (${loadout.join('/')})${lag ? ` lag=${lag}ms` : ''} — ${this.players.size} online`);
@@ -540,7 +542,14 @@ export class GameRoom {
     this.world.setHoles([]);
     this.nades = [];
     this.fires = [];
-    this.events.push({ e: 'reset' });
+    // rotate to the next map; nav and bot paths rebuild for the new layout
+    const idx = MAP_NAMES.indexOf(CURRENT_MAP);
+    setMap(MAP_NAMES[(idx + 1) % MAP_NAMES.length]);
+    this.navReady = false;
+    for (const p of this.players.values()) {
+      if (p.bot) { p.bot.path = []; p.bot.wpi = 0; }
+    }
+    this.events.push({ e: 'reset', map: CURRENT_MAP });
     for (const p of this.players.values()) {
       p.kills = 0;
       p.deaths = 0;
@@ -549,7 +558,7 @@ export class GameRoom {
       p.recent = [];
       this.spawn(p, [...p.state.slots] as Loadout);
     }
-    console.log('[round] map reset');
+    console.log(`[round] map rotated to ${CURRENT_MAP}`);
   }
 
   private randomNade(): NadeType {

@@ -285,20 +285,18 @@ function parallaxWorld(r: Renderer, cam: Camera, f: number, anchorY: number): vo
   r.beginWorld(cx, cy, cam.viewW, cam.viewH);
 }
 
-interface Flora { x: number; cell: number; h: number; base: number; fall: boolean }
+interface Flora { x: number; cell: number; h: number; base: number }
 
 function makeJungle(seed: number, spanHalf: number, minH: number, maxH: number, gap: number): Flora[] {
   const r = rng(seed);
   const out: Flora[] = [];
   let x = WORLD_W / 2 - spanHalf;
   while (x < WORLD_W / 2 + spanHalf) {
-    const fall = r() < 0.28;
     out.push({
       x,
       cell: Math.floor(r() * 64),
       h: minH + r() * (maxH - minH),
-      base: WORLD_H + 40 + r() * 320,
-      fall,
+      base: WORLD_H + 180 + r() * 420,
     });
     x += gap * (0.55 + r() * 0.8);
   }
@@ -326,33 +324,17 @@ function drawJungleLayer(r: Renderer, cam: Camera, layer: Flora[], f: number, di
   const tint: RGB = [dim, dim, dim];
   const tintB: RGB = [dim * 0.5, dim * 0.55, dim * 0.55];
   for (const fl of layer) {
-    const cells = fl.fall ? meta.falls : meta.trees;
+    const cells = meta.trees;
     const c = cells[fl.cell % cells.length];
     const w = fl.h * c.aspect;
     r.texQuadUV(fl.x - w / 2, fl.base - fl.h, w, fl.h, c.u0, c.v0, c.u1, c.v1, tint, tintB);
-    // continue the trunk/water column below the base so nothing floats
-    r.texQuadUV(fl.x - w / 2, fl.base, w, 700,
+    // continue the trunk below the base so nothing floats
+    r.texQuadUV(fl.x - w / 2, fl.base, w, 1000,
       c.u0, c.v1 - (c.v1 - c.v0) * 0.004, c.u1, c.v1, tintB, [0, 0, 0]);
   }
   r.setTexture(null);
 }
 
-function drawPandoraVines(r: Renderer, cam: Camera): void {
-  // canopy vines hanging into the top of the arena
-  parallaxWorld(r, cam, 0.5, 300);
-  const meta = PD_META!;
-  const rr2 = rng(77);
-  r.setTexture(PD_FLORA);
-  for (let i = 0; i < 26; i++) {
-    const vx = (WORLD_W / 26) * i + rr2() * 220;
-    const c = meta.vines[Math.floor(rr2() * meta.vines.length) % meta.vines.length];
-    const h = 320 + rr2() * 480;
-    const w = h * c.aspect;
-    const sway = Math.sin(vx * 0.01) * 8;
-    r.texQuadUV(vx + sway, -60, w, h, c.u0, c.v0, c.u1, c.v1, [0.85, 0.9, 0.9], [0.55, 0.62, 0.62]);
-  }
-  r.setTexture(null);
-}
 
 function drawSky(r: Renderer, cam: Camera, tex: SceneTex): void {
   const alt = 1 - cam.y / WORLD_H;        // 0 near ground, 1 at the ceiling
@@ -639,18 +621,20 @@ function drawPandoraBoulder(r: Renderer, s: MapRect): boolean {
   if (!pandoraReady() || !PD_META) return false;
   const cells = PD_META.rocks;
   if (!cells || cells.length === 0) return false;
-  const c = cells[Math.abs((s.x * 31 + s.y * 7) | 0) % cells.length];
-  // cover the collision rect, bottom-weighted so roots trail below
-  let w = s.w * 1.25;
-  let h = w / c.aspect;
-  if (h < s.h * 1.2) {
-    h = s.h * 1.2;
-    w = h * c.aspect;
+  // pick the cell whose shape best matches this hitbox, then draw it flush:
+  // the rect IS the rock; only dangling roots may spill past the bottom
+  const want = s.w / s.h;
+  let c = cells[0];
+  let bestD = Infinity;
+  const start = Math.abs((s.x * 31 + s.y * 7) | 0) % cells.length;
+  for (let k = 0; k < cells.length; k++) {
+    const cand = cells[(start + k) % cells.length];
+    const d = Math.abs(cand.aspect - want) + k * 0.02;   // slight variety bias
+    if (d < bestD) { bestD = d; c = cand; }
   }
-  const cx = s.x + s.w / 2;
-  const top = s.y - (h - s.h) * 0.35;
+  const h = s.w / c.aspect;
   r.setTexture(PD_FLORA);
-  r.texQuadUV(cx - w / 2, top, w, h, c.u0, c.v0, c.u1, c.v1, [1, 1, 1], [0.75, 0.8, 0.8]);
+  r.texQuadUV(s.x, s.y, s.w, Math.max(h, s.h), c.u0, c.v0, c.u1, c.v1, [1, 1, 1], [0.75, 0.8, 0.8]);
   r.setTexture(null);
   return true;
 }
@@ -1062,7 +1046,6 @@ export function drawScene(
     drawPandoraSky(r, cam);
     drawJungleLayer(r, cam, JUNGLE_FAR, 0.10, 0.55);
     drawJungleLayer(r, cam, JUNGLE_NEAR, 0.24, 0.85);
-    drawPandoraVines(r, cam);
   } else {
   drawSky(r, cam, tex);
   drawStars(r, cam, t);

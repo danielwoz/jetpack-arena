@@ -15,7 +15,7 @@ function r(x: number, y: number, w: number, h: number, k: SolidKind): MapRect {
 // World is y-down: y=0 is the sky ceiling, ground sits near y=3000.
 // Vertical spacing keeps every layer reachable on a partial fuel tank:
 // ground → mid platforms → high shelves → boulders → summit boulders.
-export const SOLIDS: MapRect[] = [
+const CITY_SOLIDS: MapRect[] = [
   // borders (invisible walls just outside the world) — indestructible
   { ...r(-200, -200, 200, WORLD_H + 400, 'wall'), ind: true },
   { ...r(WORLD_W, -200, 200, WORLD_H + 400, 'wall'), ind: true },
@@ -101,7 +101,7 @@ export const SOLIDS: MapRect[] = [
 ];
 
 // x, y of player center standing on a surface (surface top − player half height)
-export const SPAWN_POINTS: { x: number; y: number }[] = [
+const CITY_SPAWNS: { x: number; y: number }[] = [
   { x: 450, y: 2672 },
   { x: 1050, y: 2772 },
   { x: 1850, y: 2592 },
@@ -119,3 +119,72 @@ export const SPAWN_POINTS: { x: number; y: number }[] = [
   { x: 2850, y: 1572 },
   { x: 5950, y: 1522 },
 ];
+
+// ---------------------------------------------------------------- pandora
+// Rolling alien meadows under drifting rock islands. Hills are built from
+// narrow steps that follow a smooth curve, so the hitbox IS the visual.
+function buildPandora(): { solids: MapRect[]; spawns: { x: number; y: number }[] } {
+  const solids: MapRect[] = [
+    { ...r(-200, -200, 200, WORLD_H + 400, 'wall'), ind: true },
+    { ...r(WORLD_W, -200, 200, WORLD_H + 400, 'wall'), ind: true },
+    { ...r(-200, -200, WORLD_W + 400, 200, 'wall'), ind: true },
+    // deep bedrock beneath the hills — grenades cannot breach it
+    { ...r(0, 2930, WORLD_W, 170, 'ground'), ind: true },
+  ];
+  // rolling hills: destructible steps tracing layered sine waves
+  const STEP = 125;
+  const hillTop = (x: number): number =>
+    2770 + Math.sin(x * 0.0028) * 95 + Math.sin(x * 0.00093 + 2.1) * 75;
+  for (let x = 0; x < WORLD_W; x += STEP) {
+    const top = Math.round(hillTop(x + STEP / 2));
+    solids.push(r(x, top, STEP + 2, 2935 - top, 'ground'));
+  }
+  // floating rock islands, aspect ~1.45 to match the sprite art
+  const B = (x: number, y: number, w: number): void => {
+    solids.push(r(x, y, w, Math.round(w / 1.45), 'boulder'));
+  };
+  // low hops
+  B(500, 2380, 260); B(1450, 2300, 300); B(2400, 2420, 240); B(3300, 2280, 320);
+  B(4300, 2380, 260); B(5200, 2300, 300); B(6200, 2400, 250); B(7100, 2280, 300);
+  // mid drift
+  B(950, 1800, 300); B(1950, 1650, 360); B(2950, 1780, 280); B(3900, 1600, 340);
+  B(4900, 1760, 300); B(5900, 1640, 360); B(6900, 1780, 280); B(7600, 1620, 240);
+  // high crags
+  B(1400, 1050, 320); B(2700, 900, 280); B(4100, 1000, 360); B(5500, 880, 300);
+  B(6700, 1020, 320); B(300, 950, 260);
+  // summit stones
+  B(2100, 480, 220); B(3600, 380, 260); B(5100, 460, 230); B(6400, 400, 240);
+  // two rock spires rising from the hills
+  solids.push(r(1150, 1980, 150, 950, 'rock'));
+  solids.push(r(6050, 1900, 160, 1030, 'rock'));
+
+  const spawns: { x: number; y: number }[] = [];
+  for (const sx of [400, 1300, 2200, 3100, 4000, 4900, 5800, 6700, 7600]) {
+    spawns.push({ x: sx, y: Math.round(hillTop(sx)) - 28 });
+  }
+  spawns.push({ x: 1600, y: 2272 }, { x: 5350, y: 2272 });
+  return { solids, spawns };
+}
+
+// ------------------------------------------------------- active map state
+// SOLIDS and SPAWN_POINTS are mutated IN PLACE so every module that already
+// imported them keeps working when the map rotates.
+export const MAP_NAMES = ['city', 'pandora'] as const;
+export type MapName = (typeof MAP_NAMES)[number];
+export const SOLIDS: MapRect[] = [];
+export const SPAWN_POINTS: { x: number; y: number }[] = [];
+export let CURRENT_MAP: MapName = 'city';
+
+export function setMap(name: string): void {
+  const map: MapName = name === 'pandora' ? 'pandora' : 'city';
+  const data = map === 'pandora'
+    ? buildPandora()
+    : { solids: CITY_SOLIDS, spawns: CITY_SPAWNS };
+  SOLIDS.length = 0;
+  SOLIDS.push(...data.solids);
+  SPAWN_POINTS.length = 0;
+  SPAWN_POINTS.push(...data.spawns);
+  CURRENT_MAP = map;
+}
+
+setMap('city');

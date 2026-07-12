@@ -15,6 +15,7 @@ import { Predictor } from './predict.ts';
 import { Renderer } from './render/gl.ts';
 import { Overlay } from './render/overlay.ts';
 import { drawScene, ensureTextures, playerColor, setSceneTheme } from './render/scene.ts';
+import { setMap } from '../shared/map.ts';
 import { Ui } from './ui.ts';
 import { world } from './world.ts';
 
@@ -241,6 +242,11 @@ function handleEvents(snap: Snapshot): void {
       }
       case 'reset':
         world.setHoles([]);
+        if (ev.map) {
+          setMap(ev.map);
+          setSceneTheme(ev.map, renderer);
+          hud.invalidateMinimap();
+        }
         hud.announce('NEW ROUND');
         break;
     }

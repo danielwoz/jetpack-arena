@@ -114,6 +114,10 @@ export class Hud {
     void rtt;
   }
 
+  invalidateMinimap(): void {
+    this.minimapBg = null;
+  }
+
   // all combatants as dots over a baked terrain silhouette
   drawMinimap(players: NetPlayer[], myId: number, selfX: number, selfY: number, selfAlive: boolean): void {
     const W = this.minimap.width, H = this.minimap.height;

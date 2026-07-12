@@ -86,7 +86,10 @@ and it goes off in your hand:
   20 hp/s and keeps burning for a second after you leave.
 
 Rounds last 10 minutes: when the clock at the top of the screen runs out, the
-craters fill in, scores reset, and everyone redeploys. The Tab scoreboard
+craters fill in, scores reset, everyone redeploys — and the arena rotates to
+the next map. Two maps ship today: the neon city and Pandora, an alien
+jungle of rolling meadow hills and floating rock islands beneath giant
+bioluminescent trees. The Tab scoreboard
 ranks by kills with total damage dealt as the tiebreaker.
 
 The server itself keeps the arena populated: below 8 combatants it deploys

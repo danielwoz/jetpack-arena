@@ -100,7 +100,7 @@ export type GameEvent =
   | { e: 'drill'; x: number; y: number; dx: number; dy: number; r: number; len: number }
   | { e: 'swing'; id: number; aim: number }        // melee swipe
   | { e: 'clank'; x: number; y: number }           // bullet blocked by the pan
-  | { e: 'reset' };    // round over: craters filled, scores wiped
+  | { e: 'reset'; map?: string };    // round over: craters filled, scores wiped
 
 export interface NetNade {
   id: number;
@@ -137,7 +137,7 @@ export type C2S =
   | { t: 'pong'; id: number };
 
 export type S2C =
-  | { t: 'welcome'; id: number; tick: number; holes: Hole[]; theme?: string; tune?: unknown }
+  | { t: 'welcome'; id: number; tick: number; holes: Hole[]; map?: string; tune?: unknown }
   | { t: 'tune'; data: unknown }
   | Snapshot
   | { t: 'ping'; id: number }

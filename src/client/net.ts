@@ -2,6 +2,7 @@ import { INTERP_DELAY_TICKS, TICK_MS } from '../shared/constants.ts';
 import type { C2S, InputCmd, Loadout, NadeType, S2C, Snapshot } from '../shared/types.ts';
 import { world } from './world.ts';
 import { applyTune } from '../shared/tuning.ts';
+import { setMap } from '../shared/map.ts';
 
 function serverUrl(): string {
   const lag = new URLSearchParams(location.search).get('lag');
@@ -44,7 +45,8 @@ export class Net {
         switch (msg.t) {
           case 'welcome':
             applyTune(msg.tune);
-            net.theme = msg.theme ?? 'city';
+            net.theme = msg.map ?? 'city';
+            setMap(net.theme);
             net.myId = msg.id;
             net.estTick = msg.tick;
             world.setHoles(msg.holes);   // craters that predate this client
