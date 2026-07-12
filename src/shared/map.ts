@@ -27,17 +27,17 @@ const CITY_SOLIDS: MapRect[] = [
   // bedrock — the base floor; grenades cannot breach it
   { ...r(0, 2900, 8000, 200, 'ground'), ind: true },
 
-  // rolling terrain
-  r(0, 2700, 900, 200, 'ground'),
-  r(900, 2800, 700, 100, 'ground'),
-  r(1600, 2620, 520, 280, 'ground'),
-  r(2120, 2830, 880, 70, 'ground'),
-  r(3000, 2660, 800, 240, 'ground'),
-  r(3800, 2810, 1000, 90, 'ground'),
-  r(4800, 2560, 620, 340, 'ground'),
-  r(5420, 2790, 880, 110, 'ground'),
-  r(6300, 2660, 700, 240, 'ground'),
-  r(7000, 2760, 1000, 140, 'ground'),
+  // rolling terrain — the walkable floor cannot be dug out
+  { ...r(0, 2700, 900, 200, 'ground'), ind: true },
+  { ...r(900, 2800, 700, 100, 'ground'), ind: true },
+  { ...r(1600, 2620, 520, 280, 'ground'), ind: true },
+  { ...r(2120, 2830, 880, 70, 'ground'), ind: true },
+  { ...r(3000, 2660, 800, 240, 'ground'), ind: true },
+  { ...r(3800, 2810, 1000, 90, 'ground'), ind: true },
+  { ...r(4800, 2560, 620, 340, 'ground'), ind: true },
+  { ...r(5420, 2790, 880, 110, 'ground'), ind: true },
+  { ...r(6300, 2660, 700, 240, 'ground'), ind: true },
+  { ...r(7000, 2760, 1000, 140, 'ground'), ind: true },
 
   // rock towers / mesas
   r(1150, 2150, 130, 750, 'rock'),
@@ -140,7 +140,8 @@ function buildPandora(): { solids: MapRect[]; spawns: { x: number; y: number }[]
     2770 + Math.sin(x * 0.0028) * 95 + Math.sin(x * 0.00093 + 2.1) * 75;
   for (let x = 0; x < WORLD_W; x += STEP) {
     const top = Math.round(hillTop(x + STEP / 2));
-    solids.push(r(x, top, STEP + 2, 2935 - top, 'ground'));
+    // the meadow floor cannot be dug out
+    solids.push({ ...r(x, top, STEP + 2, 2935 - top, 'ground'), ind: true });
   }
   // floating rock islands: each takes a rock sprite (round-robin) and its
   // hitbox is that sprite's opaque pixels via the generated column mask

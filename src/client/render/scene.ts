@@ -1149,6 +1149,7 @@ export function drawScene(
   for (const s of SOLIDS) {
     if (s.k === 'wall' || !s.ind) continue;
     if (s.x + s.w < left || s.x > right || s.y + s.h < topB || s.y > bottom) continue;
+    if (pandoraReady() && s.k === 'ground') continue;   // the hill strip covers these
     VIS_SOLIDS.push(s);
   }
   drawSolids(r, VIS_SOLIDS, t, tex);
@@ -1158,8 +1159,9 @@ export function drawScene(
     const meta = PD_META;
     r.setTexture(PD_FLORA);
     for (const s2 of SOLIDS) {
-      // meadow bushes grow on the floor only — never on floating rock
-      if (s2.k !== 'ground' || s2.ind || s2.w < 100) continue;
+      // meadow bushes grow on the hill steps only — never on floating rock
+      // or the deep bedrock slab
+      if (s2.k !== 'ground' || s2.w < 100 || s2.y >= 2900) continue;
       if (s2.x + s2.w < left || s2.x > right || s2.y < topB - 200 || s2.y > bottom + 200) continue;
       const dec = rng((s2.x * 29 + s2.y * 3) | 0);
       const n = Math.min(5, Math.max(1, Math.floor(s2.w / 260)));
