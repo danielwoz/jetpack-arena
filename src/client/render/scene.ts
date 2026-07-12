@@ -951,11 +951,11 @@ function drawProgressRing(r: Renderer, x: number, y: number, R: number, t: numbe
   }
 }
 
-function drawNadeBody(r: Renderer, x: number, y: number, t: number, body: RGB = [0.35, 0.4, 0.3]): void {
+function drawNadeBody(r: Renderer, x: number, y: number, t: number, body: RGB = [0.2, 0.75, 0.3]): void {
   const dark: RGB = [body[0] * 0.45, body[1] * 0.45, body[2] * 0.45];
-  r.circle(x, y, 3.6, body, dark, 1, 10);
-  r.quad(x - 1.2, y - 5.6, 2.4, 2.4, [0.5, 0.52, 0.45]);       // fuse cap
-  r.quad(x + 1, y - 5.2, 3.2, 1.2, [0.6, 0.6, 0.55]);          // lever
+  r.circle(x, y, 5.4, body, dark, 1, 10);
+  r.quad(x - 1.8, y - 8.4, 3.6, 3.6, [0.5, 0.52, 0.45]);       // fuse cap
+  r.quad(x + 1.5, y - 7.8, 4.8, 1.8, [0.6, 0.6, 0.55]);        // lever
   void t;
 }
 
@@ -971,12 +971,37 @@ function drawFires(r: Renderer, fires: readonly NetFire[], t: number): void {
 }
 
 const NADE_BODY: Record<RenderNade['k'], RGB> = {
-  frag: [0.35, 0.4, 0.3],
-  flash: [0.75, 0.78, 0.85],
-  napalm: [0.8, 0.35, 0.12],
+  frag: [0.2, 0.75, 0.3],
+  flash: [0.95, 0.95, 1.0],
+  napalm: [0.9, 0.18, 0.1],
 };
 
+// short fading tail behind each airborne grenade
+const NADE_TRAILS = new Map<number, { x: number; y: number }[]>();
+
 function drawNades(r: Renderer, nades: RenderNade[], t: number): void {
+  const seen = new Set<number>();
+  r.setAdditive(true);
+  for (const n of nades) {
+    seen.add(n.id);
+    let tr = NADE_TRAILS.get(n.id);
+    if (!tr) {
+      tr = [];
+      NADE_TRAILS.set(n.id, tr);
+    }
+    const last = tr[tr.length - 1];
+    if (!last || Math.hypot(n.x - last.x, n.y - last.y) > 2) tr.push({ x: n.x, y: n.y });
+    if (tr.length > 14) tr.shift();
+    const col = NADE_BODY[n.k];
+    for (let i = 1; i < tr.length; i++) {
+      const a = (i / tr.length) * 0.55;
+      r.line(tr[i - 1].x, tr[i - 1].y, tr[i].x, tr[i].y, 1.5 + (i / tr.length) * 2.5, col, a);
+    }
+  }
+  r.setAdditive(false);
+  for (const id of [...NADE_TRAILS.keys()]) {
+    if (!seen.has(id)) NADE_TRAILS.delete(id);
+  }
   for (const n of nades) {
     drawNadeBody(r, n.x, n.y, t, NADE_BODY[n.k]);
     // blink faster as the fuse runs out
