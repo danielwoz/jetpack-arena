@@ -14,6 +14,7 @@ function serverUrl(): string {
 
 export class Net {
   myId = -1;
+  theme = 'city';
   onSnap: (s: Snapshot) => void = () => {};
   onClose: () => void = () => {};
 
@@ -40,6 +41,7 @@ export class Net {
         try { msg = JSON.parse(ev.data as string) as S2C; } catch { return; }
         switch (msg.t) {
           case 'welcome':
+            net.theme = msg.theme ?? 'city';
             net.myId = msg.id;
             net.estTick = msg.tick;
             world.setHoles(msg.holes);   // craters that predate this client

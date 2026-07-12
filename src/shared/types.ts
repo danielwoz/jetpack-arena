@@ -135,7 +135,7 @@ export type C2S =
   | { t: 'pong'; id: number };
 
 export type S2C =
-  | { t: 'welcome'; id: number; tick: number; holes: Hole[] }
+  | { t: 'welcome'; id: number; tick: number; holes: Hole[]; theme?: string }
   | Snapshot
   | { t: 'ping'; id: number }
   | { t: 'reject'; reason: string };

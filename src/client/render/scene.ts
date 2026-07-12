@@ -28,6 +28,39 @@ interface SceneTex {
 let TEX: SceneTex | null = null;
 let ATLAS: SoldierAtlas | null = null;
 
+// ---- Pandora theme: alien-jungle reskin. The server's welcome message
+// picks the default; a ?theme= URL param overrides for testing.
+const THEME_OVERRIDE = typeof location !== 'undefined'
+  ? new URLSearchParams(location.search).get('theme') : null;
+let THEME = THEME_OVERRIDE ?? 'city';
+let themeRenderer: Renderer | null = null;
+
+export function setSceneTheme(theme: string, r: Renderer): void {
+  if (THEME_OVERRIDE) theme = THEME_OVERRIDE;
+  if (theme === THEME && theme !== 'pandora') return;
+  THEME = theme;
+  if (theme === 'pandora' && !PD_SKY) loadPandoraAssets(r);
+}
+
+function loadPandoraAssets(r: Renderer): void {
+  upgradeTex(r, '/tex/pd_sky.png', false, (t2) => { PD_SKY = t2; });
+  upgradeTex(r, '/tex/pd_grass.png', true, (t2) => { PD_GRASS = t2; });
+  upgradeTex(r, '/tex/pd_flora.png', false, (t2) => { PD_FLORA = t2; });
+  fetch('/tex/pd_meta.json').then((res) => res.json())
+    .then((m: Record<string, PdCell[]>) => { PD_META = m; })
+    .catch(() => {});
+}
+
+interface PdCell { u0: number; v0: number; u1: number; v1: number; aspect: number }
+let PD_SKY: Texture | null = null;
+let PD_GRASS: Texture | null = null;
+let PD_FLORA: Texture | null = null;
+let PD_META: Record<string, PdCell[]> | null = null;
+
+function pandoraReady(): boolean {
+  return THEME === 'pandora' && !!(PD_SKY && PD_FLORA && PD_META);
+}
+
 // unique AI facade per skyline building (atlas of FACADE_N cells)
 let FACADES: Texture | null = null;
 let FACADE_ASPECTS: number[] | null = null;
@@ -119,6 +152,9 @@ export function ensureTextures(r: Renderer): SceneTex {
     fetch('/tex/facades.json').then((res) => res.json())
       .then((a: number[]) => { FACADE_ASPECTS = a; })
       .catch(() => {});
+    themeRenderer = r;
+    if (THEME === 'pandora') loadPandoraAssets(r);
+    void themeRenderer;
     // pre-bake the standard camo set so new players don't hitch mid-fight
     for (let i = 0; i < CAMO_COUNT; i++) {
       const v = buildBodyVariant(i);
@@ -247,6 +283,75 @@ function parallaxWorld(r: Renderer, cam: Camera, f: number, anchorY: number): vo
   const cx = cam.x * f + (WORLD_W / 2) * (1 - f);
   const cy = cam.y * f + anchorY * (1 - f);
   r.beginWorld(cx, cy, cam.viewW, cam.viewH);
+}
+
+interface Flora { x: number; cell: number; h: number; base: number; fall: boolean }
+
+function makeJungle(seed: number, spanHalf: number, minH: number, maxH: number, gap: number): Flora[] {
+  const r = rng(seed);
+  const out: Flora[] = [];
+  let x = WORLD_W / 2 - spanHalf;
+  while (x < WORLD_W / 2 + spanHalf) {
+    const fall = r() < 0.28;
+    out.push({
+      x,
+      cell: Math.floor(r() * 64),
+      h: minH + r() * (maxH - minH),
+      base: WORLD_H + 40 + r() * 320,
+      fall,
+    });
+    x += gap * (0.55 + r() * 0.8);
+  }
+  return out;
+}
+const JUNGLE_FAR = makeJungle(11, 5200, 1500, 2400, 900);
+const JUNGLE_NEAR = makeJungle(23, 5600, 1100, 1900, 1300);
+
+function drawPandoraSky(r: Renderer, cam: Camera): void {
+  const alt = 1 - cam.y / WORLD_H;
+  r.beginScreen();
+  r.setTexture(PD_SKY);
+  const uOff = cam.x * 0.00003;
+  const vOff = alt * 0.16;
+  const dim = 1 - alt * 0.2;
+  const tint: RGB = [dim, dim, dim];
+  r.texQuadUV(0, 0, r.width, r.height, uOff, vOff * 0.3, uOff + 1, 1 - vOff * 0.1, tint, tint);
+  r.setTexture(null);
+}
+
+function drawJungleLayer(r: Renderer, cam: Camera, layer: Flora[], f: number, dim: number): void {
+  parallaxWorld(r, cam, f, WORLD_H);
+  const meta = PD_META!;
+  r.setTexture(PD_FLORA);
+  const tint: RGB = [dim, dim, dim];
+  const tintB: RGB = [dim * 0.5, dim * 0.55, dim * 0.55];
+  for (const fl of layer) {
+    const cells = fl.fall ? meta.falls : meta.trees;
+    const c = cells[fl.cell % cells.length];
+    const w = fl.h * c.aspect;
+    r.texQuadUV(fl.x - w / 2, fl.base - fl.h, w, fl.h, c.u0, c.v0, c.u1, c.v1, tint, tintB);
+    // continue the trunk/water column below the base so nothing floats
+    r.texQuadUV(fl.x - w / 2, fl.base, w, 700,
+      c.u0, c.v1 - (c.v1 - c.v0) * 0.004, c.u1, c.v1, tintB, [0, 0, 0]);
+  }
+  r.setTexture(null);
+}
+
+function drawPandoraVines(r: Renderer, cam: Camera): void {
+  // canopy vines hanging into the top of the arena
+  parallaxWorld(r, cam, 0.5, 300);
+  const meta = PD_META!;
+  const rr2 = rng(77);
+  r.setTexture(PD_FLORA);
+  for (let i = 0; i < 26; i++) {
+    const vx = (WORLD_W / 26) * i + rr2() * 220;
+    const c = meta.vines[Math.floor(rr2() * meta.vines.length) % meta.vines.length];
+    const h = 320 + rr2() * 480;
+    const w = h * c.aspect;
+    const sway = Math.sin(vx * 0.01) * 8;
+    r.texQuadUV(vx + sway, -60, w, h, c.u0, c.v0, c.u1, c.v1, [0.85, 0.9, 0.9], [0.55, 0.62, 0.62]);
+  }
+  r.setTexture(null);
 }
 
 function drawSky(r: Renderer, cam: Camera, tex: SceneTex): void {
@@ -530,16 +635,54 @@ const BOULDER_TOP: RGB = [0.30, 0.25, 0.38];
 const BOULDER_BODY: RGB = [0.16, 0.13, 0.22];
 const CRYSTAL: RGB = [0.80, 0.45, 1.0];
 
+function drawPandoraBoulder(r: Renderer, s: MapRect): boolean {
+  if (!pandoraReady() || !PD_META) return false;
+  const cells = PD_META.rocks;
+  if (!cells || cells.length === 0) return false;
+  const c = cells[Math.abs((s.x * 31 + s.y * 7) | 0) % cells.length];
+  // cover the collision rect, bottom-weighted so roots trail below
+  let w = s.w * 1.25;
+  let h = w / c.aspect;
+  if (h < s.h * 1.2) {
+    h = s.h * 1.2;
+    w = h * c.aspect;
+  }
+  const cx = s.x + s.w / 2;
+  const top = s.y - (h - s.h) * 0.35;
+  r.setTexture(PD_FLORA);
+  r.texQuadUV(cx - w / 2, top, w, h, c.u0, c.v0, c.u1, c.v1, [1, 1, 1], [0.75, 0.8, 0.8]);
+  r.setTexture(null);
+  return true;
+}
+
 function drawSolid(r: Renderer, s: MapRect, t: number, tex: SceneTex): void {
   if (s.k === 'wall') return;
+  if (s.k === 'boulder' && drawPandoraBoulder(r, s)) return;
   const P = solidPoly(s);
   r.poly(P.outline, OUTLINE);
 
   switch (s.k) {
     case 'ground': {
-      r.setTexture(tex.concrete);
-      r.texPoly(P.pts, 340, [0.62, 0.68, 0.74], [0.30, 0.33, 0.42], P.minY, P.maxY);
+      const grassy = THEME === 'pandora' && PD_GRASS;
+      r.setTexture(grassy ? PD_GRASS : tex.concrete);
+      if (grassy) {
+        r.texPoly(P.pts, 340, [0.72, 0.85, 0.66], [0.28, 0.40, 0.30], P.minY, P.maxY);
+      } else {
+        r.texPoly(P.pts, 340, [0.62, 0.68, 0.74], [0.30, 0.33, 0.42], P.minY, P.maxY);
+      }
       r.setTexture(null);
+      if (grassy) {
+        // sunlit meadow lip instead of the tech strip
+        r.quad(s.x, s.y, s.w, 5, [0.45, 0.85, 0.4], 0.5);
+        const dec2 = rng((s.x * 13 + s.y * 7) | 0);
+        r.setAdditive(true);
+        for (let i = 0; i < 4; i++) {
+          const lx = s.x + 30 + dec2() * (s.w - 60);
+          r.glowDisc(lx, s.y + 6 + dec2() * 12, 6 + dec2() * 9, [0.4, 1, 0.6], 0.12 + dec2() * 0.1, 8);
+        }
+        r.setAdditive(false);
+        break;
+      }
       r.quad(s.x, s.y, s.w, 6, mix(GROUND_TOP, ACCENT, 0.35), 0.75);
       r.quad(s.x, s.y, s.w, 1.8, ACCENT, 0.55);
       // expansion seams
@@ -915,11 +1058,18 @@ export function drawScene(
   const tex = ensureTextures(r);
   if (clear) r.clear();
 
+  if (pandoraReady()) {
+    drawPandoraSky(r, cam);
+    drawJungleLayer(r, cam, JUNGLE_FAR, 0.10, 0.55);
+    drawJungleLayer(r, cam, JUNGLE_NEAR, 0.24, 0.85);
+    drawPandoraVines(r, cam);
+  } else {
   drawSky(r, cam, tex);
   drawStars(r, cam, t);
   drawNebulaAndPlanet(r, cam, t, tex);
   drawCity(r, cam, CITY_FAR, 0.16, [0.055, 0.06, 0.13], [0.09, 0.10, 0.19], t, true);
   drawCity(r, cam, CITY_NEAR, 0.34, [0.075, 0.085, 0.16], [0.12, 0.13, 0.23], t, false);
+  }
 
   // main world pass
   r.beginWorld(cam.x, cam.y, cam.viewW, cam.viewH);
@@ -937,6 +1087,25 @@ export function drawScene(
     drawSolid(r, s, t, tex);
   }
 
+  if (pandoraReady() && PD_META) {
+    // bushes rooted along the walkable tops
+    const meta = PD_META;
+    r.setTexture(PD_FLORA);
+    for (const s2 of SOLIDS) {
+      if (s2.k === 'wall' || s2.w < 120) continue;
+      if (s2.x + s2.w < left || s2.x > right || s2.y < topB - 200 || s2.y > bottom + 200) continue;
+      const dec = rng((s2.x * 29 + s2.y * 3) | 0);
+      const n = Math.min(5, Math.max(1, Math.floor(s2.w / 260)));
+      for (let i = 0; i < n; i++) {
+        const c = meta.bushes[Math.floor(dec() * meta.bushes.length) % meta.bushes.length];
+        const bh = 26 + dec() * 44;
+        const bw = bh * c.aspect;
+        const bx = s2.x + 20 + dec() * (s2.w - 40 - bw);
+        r.texQuadUV(bx, s2.y - bh + 2, bw, bh, c.u0, c.v0, c.u1, c.v1, [1, 1, 1], [0.8, 0.85, 0.8]);
+      }
+    }
+    r.setTexture(null);
+  }
   drawHoles(r, left, right, topB, bottom, t);
   drawFires(r, fires, t);
   drawNades(r, nades, t);

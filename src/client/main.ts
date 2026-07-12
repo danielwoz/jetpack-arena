@@ -14,7 +14,7 @@ import { Net } from './net.ts';
 import { Predictor } from './predict.ts';
 import { Renderer } from './render/gl.ts';
 import { Overlay } from './render/overlay.ts';
-import { drawScene, ensureTextures, playerColor } from './render/scene.ts';
+import { drawScene, ensureTextures, playerColor, setSceneTheme } from './render/scene.ts';
 import { Ui } from './ui.ts';
 import { world } from './world.ts';
 
@@ -144,6 +144,7 @@ function onSnapshot(snap: Snapshot): void {
     predictor.reconcile(self, snap.ack);
     if (!started) {
       started = true;
+      setSceneTheme(net!.theme, renderer);
       wasAlive = self.alive;
       ui.hideJoin();
       hud.show();

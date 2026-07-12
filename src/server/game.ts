@@ -199,6 +199,7 @@ export class GameRoom {
         player = this.createPlayer(conn, name, loadout, nadeType);
         conn.send(JSON.stringify({
           t: 'welcome', id: player.id, tick: this.tick, holes: this.world.holes,
+          theme: process.env.THEME ?? 'city',
         }));
         console.log(`[join] #${player.id} ${name} (${loadout.join('/')})${lag ? ` lag=${lag}ms` : ''} — ${this.players.size} online`);
         return;
