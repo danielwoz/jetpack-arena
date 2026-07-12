@@ -1,5 +1,10 @@
 import { RESPAWN_TICKS, TICK_MS } from '../shared/constants.ts';
-import { NADES, SLOT_OPTIONS, WEAPONS, DEFAULT_LOADOUT } from '../shared/weapons.ts';
+import {
+  NADES,
+  SLOT_OPTIONS,
+  WEAPONS,
+  DEFAULT_LOADOUT,
+} from '../shared/weapons.ts';
 import type { Loadout, NadeType, WeaponId } from '../shared/types.ts';
 import { ACTIONS, ACTION_LABELS, bindings } from './bindings.ts';
 import { audio } from './audio.ts';
@@ -8,16 +13,45 @@ function el<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
 }
 
-const SLOT_TITLES = ['SLOT 1 — PRIMARY', 'SLOT 2 — SECONDARY', 'SLOT 3 — SIDEARM'];
+const SLOT_TITLES = [
+  'SLOT 1 — PRIMARY',
+  'SLOT 2 — SECONDARY',
+  'SLOT 3 — SIDEARM',
+];
+
+function weaponTooltip(name: string, desc: string): string {
+  return `${name} — ${desc}`;
+}
+
+function weaponStats(w: {
+  damage: number;
+  pellets: number;
+  rpm: number;
+  melee?: { range: number; arcDeg: number };
+  mag: number;
+  moveMult: number;
+  burst?: unknown;
+}): string {
+  const rpm = w.burst ? 'BURST' : w.melee ? 'SWING' : `${w.rpm}`;
+  const mag = w.melee ? '∞' : `${w.mag}`;
+  return `DMG ${w.damage}${w.pellets > 1 ? `×${w.pellets}` : ''} · RPM ${rpm} · MAG ${mag} · SPD ${Math.round(w.moveMult * 100)}%`;
+}
 
 function loadStoredLoadout(): Loadout {
   try {
-    const raw = JSON.parse(localStorage.getItem('loadout') ?? 'null') as Loadout | null;
-    if (Array.isArray(raw) && raw.length === 3
-      && raw.every((w, i) => SLOT_OPTIONS[i].includes(w))) {
+    const raw = JSON.parse(
+      localStorage.getItem('loadout') ?? 'null',
+    ) as Loadout | null;
+    if (
+      Array.isArray(raw) &&
+      raw.length === 3 &&
+      raw.every((w, i) => SLOT_OPTIONS[i].includes(w))
+    ) {
       return raw;
     }
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return [...DEFAULT_LOADOUT];
 }
 
@@ -27,63 +61,108 @@ function loadStoredNade(): NadeType {
 }
 
 // Builds the three slot groups + grenade choice; mutates the live selections.
-function buildLoadoutPicker(container: HTMLElement, loadout: Loadout, sel: { nade: NadeType }): Loadout {
+function buildLoadoutPicker(
+  container: HTMLElement,
+  loadout: Loadout,
+  sel: { nade: NadeType },
+): Loadout {
   container.innerHTML = '';
-  for (let slot = 0; slot < 3; slot++) {
+  const layout = document.createElement('div');
+  layout.className = 'loadout-layout';
+  container.appendChild(layout);
+
+  const sections = [
+    {
+      title: SLOT_TITLES[0],
+      kind: 'weapon' as const,
+      selected: loadout[0],
+      ids: SLOT_OPTIONS[0],
+    },
+    {
+      title: SLOT_TITLES[1],
+      kind: 'weapon' as const,
+      selected: loadout[1],
+      ids: SLOT_OPTIONS[1],
+    },
+    {
+      title: SLOT_TITLES[2],
+      kind: 'weapon' as const,
+      selected: loadout[2],
+      ids: SLOT_OPTIONS[2],
+    },
+    {
+      title: 'GRENADE',
+      kind: 'nade' as const,
+      selected: sel.nade,
+      ids: ['frag', 'flash', 'napalm'] as NadeType[],
+    },
+  ];
+
+  for (let slot = 0; slot < sections.length; slot++) {
+    const section = sections[slot];
+    const col = document.createElement('div');
+    col.className = 'loadout-column';
+
     const title = document.createElement('div');
     title.className = 'slot-title';
-    title.textContent = SLOT_TITLES[slot];
-    container.appendChild(title);
+    title.textContent = section.title;
+    col.appendChild(title);
+
     const row = document.createElement('div');
     row.className = 'weapon-grid';
-    const cards = new Map<WeaponId, HTMLElement>();
-    for (const id of SLOT_OPTIONS[slot]) {
-      const w = WEAPONS[id];
-      const card = document.createElement('div');
-      card.className = 'weapon-card' + (loadout[slot] === id ? ' selected' : '');
-      card.innerHTML =
-        `<div class="wname">${w.name}</div><div class="wrole">${w.role}</div>` +
-        `<div class="wstat"><span>DMG</span><b>${w.damage}${w.pellets > 1 ? `×${w.pellets}` : ''}</b></div>` +
-        `<div class="wstat"><span>RPM</span><b>${w.burst ? 'BURST' : (w.melee ? 'SWING' : w.rpm)}</b></div>` +
-        `<div class="wstat"><span>MAG</span><b>${w.melee ? '∞' : w.mag}</b></div>` +
-        `<div class="wstat"><span>SPEED</span><b>${Math.round(w.moveMult * 100)}%</b></div>`;
-      card.addEventListener('click', () => {
-        for (const c of cards.values()) c.classList.remove('selected');
-        card.classList.add('selected');
-        loadout[slot] = id;
-        localStorage.setItem('loadout', JSON.stringify(loadout));
-      });
-      row.appendChild(card);
-      cards.set(id, card);
+
+    if (section.kind === 'weapon') {
+      const cards = new Map<WeaponId, HTMLElement>();
+      for (const id of section.ids) {
+        const w = WEAPONS[id];
+        const card = document.createElement('div');
+        card.className =
+          'weapon-card' + (loadout[slot] === id ? ' selected' : '');
+        card.title = weaponTooltip(w.name, w.role);
+        card.setAttribute(
+          'aria-label',
+          `${w.name}. ${w.role}. ${weaponStats(w)}`,
+        );
+        card.innerHTML =
+          `<div class="wname">${w.name}</div>` +
+          `<div class="wmeta">${weaponStats(w)}</div>`;
+        card.addEventListener('click', () => {
+          for (const c of cards.values()) c.classList.remove('selected');
+          card.classList.add('selected');
+          loadout[slot] = id;
+          localStorage.setItem('loadout', JSON.stringify(loadout));
+        });
+        row.appendChild(card);
+        cards.set(id, card);
+      }
+    } else {
+      const cards = new Map<NadeType, HTMLElement>();
+      for (const kind of section.ids) {
+        const n = NADES[kind];
+        const card = document.createElement('div');
+        card.className = 'weapon-card' + (sel.nade === kind ? ' selected' : '');
+        card.title = weaponTooltip(n.name, n.desc);
+        card.setAttribute(
+          'aria-label',
+          `${n.name}. ${n.desc}. Fuse ${(n.fuse / 60).toFixed(0)} seconds.`,
+        );
+        card.innerHTML =
+          `<div class="wname">${n.name}</div>` +
+          `<div class="wmeta">FUSE ${(n.fuse / 60).toFixed(0)}s · COUNT 3</div>`;
+        card.addEventListener('click', () => {
+          for (const c of cards.values()) c.classList.remove('selected');
+          card.classList.add('selected');
+          sel.nade = kind;
+          localStorage.setItem('nadetype', kind);
+        });
+        row.appendChild(card);
+        cards.set(kind, card);
+      }
     }
-    container.appendChild(row);
+
+    col.appendChild(row);
+    layout.appendChild(col);
   }
-  // grenade choice
-  const title = document.createElement('div');
-  title.className = 'slot-title';
-  title.textContent = 'GRENADE';
-  container.appendChild(title);
-  const row = document.createElement('div');
-  row.className = 'weapon-grid';
-  const cards = new Map<NadeType, HTMLElement>();
-  for (const kind of ['frag', 'flash', 'napalm'] as NadeType[]) {
-    const n = NADES[kind];
-    const card = document.createElement('div');
-    card.className = 'weapon-card' + (sel.nade === kind ? ' selected' : '');
-    card.innerHTML =
-      `<div class="wname">${n.name}</div><div class="wrole">${n.desc}</div>` +
-      `<div class="wstat"><span>FUSE</span><b>${(n.fuse / 60).toFixed(0)}s</b></div>` +
-      `<div class="wstat"><span>COUNT</span><b>3</b></div>`;
-    card.addEventListener('click', () => {
-      for (const c of cards.values()) c.classList.remove('selected');
-      card.classList.add('selected');
-      sel.nade = kind;
-      localStorage.setItem('nadetype', kind);
-    });
-    row.appendChild(card);
-    cards.set(kind, card);
-  }
-  container.appendChild(row);
   return loadout;
 }
 
@@ -102,7 +181,8 @@ export class Ui {
   private respawnReadyAt = 0;
   private countdownTimer = 0;
 
-  onJoin: (name: string, loadout: Loadout, nadeType: NadeType) => void = () => {};
+  onJoin: (name: string, loadout: Loadout, nadeType: NadeType) => void =
+    () => {};
   onRespawn: (loadout: Loadout, nadeType: NadeType) => void = () => {};
   onCaptureChange: (capturing: boolean) => void = () => {};
 
@@ -222,7 +302,9 @@ export class Ui {
 
   showDeath(killerName: string | null): void {
     buildLoadoutPicker(el('death-weapons'), this.loadout, this.nadeSel);
-    this.deathMsg.textContent = killerName ? `ELIMINATED BY ${killerName.toUpperCase()}` : 'YOU DIED';
+    this.deathMsg.textContent = killerName
+      ? `ELIMINATED BY ${killerName.toUpperCase()}`
+      : 'YOU DIED';
     this.death.classList.remove('hidden');
     this.respawnReadyAt = performance.now() + RESPAWN_TICKS * TICK_MS;
     this.respawnBtn.disabled = true;
