@@ -84,14 +84,14 @@ export function kill(world: CombatWorld, attacker: CombatPlayer, victim: CombatP
   });
 }
 
-// Frag detonation: 95 at the center tapering to 30 at the blast edge.
+// Frag detonation: 95 at the center tapering to ~62 at the blast edge.
 // Explosions ignore walls by design — shrapnel through a fresh crater.
 export function explode(world: CombatWorld, x: number, y: number, owner: CombatPlayer | null): void {
   for (const v of world.allPlayers()) {
     if (!v.state.alive || world.tick < v.protUntil) continue;
     const d = dist(x, y, v.state.x, v.state.y);
     if (d >= NADE_RADIUS) continue;
-    const dmg = Math.round(95 - (95 - 30) * (d / NADE_RADIUS));
+    const dmg = Math.round(95 - (95 - 62.5) * (d / NADE_RADIUS));
     if (dmg <= 0) continue;
     applyDamage(v.state, dmg);
     if (owner && owner.id !== v.id) owner.dmg += dmg;
@@ -241,7 +241,7 @@ const PIERCING = new Set<PlayerState['weapon']>(['rifle', 'ak47', 'mk47', 'dmr',
 const CHANNEL: Partial<Record<PlayerState['weapon'], { r: number; len: number }>> = {
   rifle: { r: 5, len: 34 }, ak47: { r: 5, len: 34 }, mk47: { r: 5, len: 34 },
   m249: { r: 8, len: 34 },
-  dmr: { r: 3.5, len: 68 }, sniper: { r: 3.5, len: 68 },
+  dmr: { r: 3.5, len: 68 }, sniper: { r: 3.5, len: 102 },
 };
 const PIERCE_HOLE_R = 8;
 

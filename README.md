@@ -73,9 +73,9 @@ explosions, hit thuds, your jetpack, and a soft, sinister ambient score.
 You choose a grenade type with your loadout (3 per spawn); cook one too long
 and it goes off in your hand:
 
-- **Frag** (3 s fuse) — 95 damage at the center falling to 30 at the blast
-  edge, and it craters the terrain. Its shockwave reaches twice the damage
-  radius and hurls anyone airborne away from the blast. Everything except the bedrock floor is
+- **Frag** (3 s fuse) — 95 damage at the center falling gently to ~62 at the
+  blast edge, and it craters the terrain. Its shockwave reaches twice the
+  damage radius and hurls anyone airborne away from the blast. Everything except the bedrock floor is
   destructible, and you can move and shoot through the holes.
 - **Flashbang** (1 s fuse) — whites out the screen of anyone nearby for up to
   4 seconds, strongest at the center; repeat bangs stack. It throws twice as
