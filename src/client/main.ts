@@ -1,7 +1,7 @@
 import './style.css';
 import { FLASH_BLIND_SECS, FLASH_RADIUS, PLAYER_HH, TICK_MS } from '../shared/constants.ts';
 import { lerp } from '../shared/math.ts';
-import { WEAPONS, reloadTicks, spreadRad } from '../shared/weapons.ts';
+import { NADES, WEAPONS, reloadTicks, spreadRad } from '../shared/weapons.ts';
 import type { PlayerState, Snapshot } from '../shared/types.ts';
 import { audio } from './audio.ts';
 import { Camera } from './camera.ts';
@@ -436,6 +436,7 @@ function render(dtSec: number, alpha: number): void {
     priming: st.prime > 0, healing: st.bandage > 0,
     bandageT: st.bandage > 0 ? 1 - st.bandage / 60 : 0,
     reloadT: st.reload > 0 ? 1 - st.reload / reloadTicks(st.weapon) : 0,
+    primeT: st.prime > 0 ? st.prime / NADES[st.nadeType].fuse : 0,
     burning: netSelf?.burn ?? false,
     dizzy: netSelf?.dizzy ?? false,
     vx: st.vx, onGround: st.onGround,

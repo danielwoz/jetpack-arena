@@ -18,6 +18,7 @@ export interface RenderPlayer {
   healing: boolean;
   bandageT: number;    // own bandage progress 0..1 (0 for everyone else)
   reloadT: number;     // own reload progress 0..1 (0 for everyone else)
+  primeT: number;      // own grenade-cook progress 0..1
   burning: boolean;
   dizzy: boolean;
   vx: number;          // for the run-cycle animation
@@ -39,7 +40,7 @@ function toRender(p: NetPlayer, x: number, y: number, aim: number): RenderPlayer
     id: p.id, name: p.name, x, y, aim,
     alive: p.alive, weapon: p.weapon, hp: p.hp, prot: p.prot,
     jetU: p.jetU, jetD: p.jetD,
-    priming: p.prime > 0, healing: p.bandage > 0, bandageT: 0, reloadT: 0, burning: p.burn, dizzy: p.dizzy,
+    priming: p.prime > 0, healing: p.bandage > 0, bandageT: 0, reloadT: 0, primeT: 0, burning: p.burn, dizzy: p.dizzy,
     vx: p.vx, onGround: p.onGround,
   };
 }

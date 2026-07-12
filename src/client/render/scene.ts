@@ -827,7 +827,7 @@ interface SoldierPose {
   id: number; name: string; x: number; y: number; aim: number;
   weapon: WeaponId; vx: number; onGround: boolean;
   jetU: boolean; jetD: boolean; priming: boolean; healing: boolean;
-  bandageT: number; reloadT: number; dizzy: boolean;
+  bandageT: number; reloadT: number; primeT: number; dizzy: boolean;
   prot: boolean; accent: RGB;
 }
 
@@ -929,10 +929,11 @@ function drawSoldier(r: Renderer, p: SoldierPose, dt: number, t: number, tex: Sc
     r.quad(p.x - 4.5, top - 28, 9, 3, [0.35, 1, 0.6], a);
   }
 
-  // ---- own bandage: a ring drawn clockwise around the player as it channels
-  drawProgressRing(r, p.x, p.y, 42, p.bandageT, [0.35, 1, 0.6]);
-  // ---- own reload: same idea, a larger white ring
-  drawProgressRing(r, p.x, p.y, 52, p.reloadT, [1, 1, 1]);
+  // ---- own progress rings, inside-out: grenade cook (dark green),
+  // bandage (white), reload (yellow)
+  drawProgressRing(r, p.x, p.y, 32, p.primeT, [0.1, 0.55, 0.18]);
+  drawProgressRing(r, p.x, p.y, 42, p.bandageT, [1, 1, 1]);
+  drawProgressRing(r, p.x, p.y, 52, p.reloadT, [1, 0.85, 0.2]);
 }
 
 function drawProgressRing(r: Renderer, x: number, y: number, R: number, t: number, color: RGB): void {
@@ -1164,7 +1165,7 @@ export function drawScene(
     drawSoldier(r, {
       id: p.id, name: p.name, x: p.x, y: p.y, aim: p.aim, weapon: p.weapon,
       vx: p.vx, onGround: p.onGround, jetU: p.jetU, jetD: p.jetD,
-      priming: p.priming, healing: p.healing, bandageT: p.bandageT, reloadT: p.reloadT,
+      priming: p.priming, healing: p.healing, bandageT: p.bandageT, reloadT: p.reloadT, primeT: p.primeT,
       dizzy: p.dizzy, prot: p.prot, accent: playerColor(p.id),
     }, dt, t, tex);
   }
@@ -1189,7 +1190,7 @@ export function drawScene(
     drawSoldier(r, {
       id: self.id, name: self.name, x: self.x, y: self.y, aim: self.aim, weapon: self.weapon,
       vx: self.vx, onGround: self.onGround, jetU: self.jetU, jetD: self.jetD,
-      priming: self.priming, healing: self.healing, bandageT: self.bandageT, reloadT: self.reloadT,
+      priming: self.priming, healing: self.healing, bandageT: self.bandageT, reloadT: self.reloadT, primeT: self.primeT,
       dizzy: self.dizzy, prot: self.prot, accent: playerColor(self.id),
     }, dt, t, tex);
   }
