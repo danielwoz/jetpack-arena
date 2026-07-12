@@ -211,6 +211,10 @@ body.playing {
   margin-bottom: 0;
 }
 .weapon-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   width: 100%;
   padding: 9px 10px 8px;
   background: #0e1326;
@@ -222,6 +226,10 @@ body.playing {
     transform 0.12s,
     background 0.12s;
   text-align: left;
+}
+.weapon-card-main {
+  min-width: 0;
+  flex: 1;
 }
 .weapon-card:hover {
   border-color: #4a6ab8;
@@ -250,6 +258,89 @@ body.playing {
   font-size: 10px;
   line-height: 1.2;
   color: #93a3c9;
+}
+.weapon-icon {
+  width: 84px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  background-image: none;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: center;
+  background-color: transparent;
+  opacity: 1;
+  filter:
+    brightness(1.04)
+    contrast(1.14)
+    drop-shadow(0 0 2px rgba(170, 205, 255, 0.35))
+    drop-shadow(0 0 8px rgba(110, 155, 235, 0.22));
+}
+.weapon-icon.pending {
+  display: grid;
+  place-items: center;
+  border: 1px solid #3b4e7f;
+  background: linear-gradient(180deg, rgba(24, 35, 68, 0.9), rgba(16, 25, 49, 0.9));
+  color: #b9d6ff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.nade-icon {
+  width: 42px;
+  height: 30px;
+  border: none;
+  border-radius: 0;
+  background-image: none;
+  position: relative;
+  opacity: 1;
+  filter: none;
+}
+.nade-icon::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 53%;
+  width: 17px;
+  height: 17px;
+  transform: translate(-56%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 34%, var(--nade-hi), var(--nade-body) 67%);
+  box-shadow: inset -2px -2px 0 0 var(--nade-dark);
+}
+.nade-icon .nade-cap {
+  position: absolute;
+  left: 48%;
+  top: 15%;
+  width: 6px;
+  height: 5px;
+  transform: translateX(-50%);
+  background: #7f8572;
+  border-radius: 1px;
+}
+.nade-icon .nade-lever {
+  position: absolute;
+  left: 58%;
+  top: 19%;
+  width: 9px;
+  height: 2px;
+  border-radius: 1px;
+  background: #949985;
+}
+.nade-icon.nade-frag {
+  --nade-hi: #77cc8f;
+  --nade-body: #2fad58;
+  --nade-dark: #17592f;
+}
+.nade-icon.nade-flash {
+  --nade-hi: #ffffff;
+  --nade-body: #d7d8de;
+  --nade-dark: #7f8592;
+}
+.nade-icon.nade-napalm {
+  --nade-hi: #ff7e60;
+  --nade-body: #d23a2d;
+  --nade-dark: #741712;
 }
 
 button {
@@ -506,6 +597,19 @@ button.minor {
   }
   .weapon-card .wmeta {
     font-size: 9px;
+  }
+  .weapon-icon {
+    width: 72px;
+    height: 30px;
+    background-size: 351px 197px;
+  }
+  .nade-icon {
+    width: 36px;
+    height: 26px;
+  }
+  .nade-icon::before {
+    width: 15px;
+    height: 15px;
   }
   #name {
     margin-bottom: 10px;

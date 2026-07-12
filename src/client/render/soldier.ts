@@ -708,6 +708,7 @@ function paintLegs(ctx: Ctx, ox: number, oy: number, pose: LegPose): void {
 
 // cell 420×180 px, shoulder pivot at (70, 90), bore line y≈84
 const GP = { x: 70, y: 90 };
+let ARMS_ENABLED = true;
 
 function glove(ctx: Ctx, x: number, y: number): void {
   ctx.fillStyle = lin(ctx, x - 8, 0, x + 8, 0, [[0, '#26231e'], [0.5, '#3a352d'], [1, '#1c1a16']]);
@@ -724,6 +725,7 @@ function glove(ctx: Ctx, x: number, y: number): void {
 }
 
 function arm(ctx: Ctx, sx: number, sy: number, ex: number, ey: number, hx: number, hy: number, far: boolean): void {
+  if (!ARMS_ENABLED) return;
   ctx.save();
   if (far) ctx.filter = 'brightness(0.6)';
   ctx.lineCap = 'round';
@@ -1780,4 +1782,69 @@ export function buildSoldierAtlas(): SoldierAtlas {
     shoulder: [0.5, -4.5],
     packNozzle: [-13.5, 12.5],
   };
+}
+
+// UI helper: creates per-weapon icon images from exact 420x180 gun-cell crops.
+export function buildGunIconDataUrls(includeArms = false): Record<WeaponId, string> {
+  const prev = ARMS_ENABLED;
+  ARMS_ENABLED = includeArms;
+  const atlas = buildSoldierAtlas();
+  ARMS_ENABLED = prev;
+
+  const ids: WeaponId[] = ['pistol', 'ump', 'mp5', 'mac10', 'rifle', 'shotgun', 'sniper', 'mk47', 'ak47', 'dmr', 'pan', 'm249'];
+  const out = {} as Record<WeaponId, string>;
+  ids.forEach((id, i) => {
+    const cx = (i % 4) * 460;
+    const cy = 550 + Math.floor(i / 4) * 190;
+
+    const base = document.createElement('canvas');
+    base.width = 84;
+    base.height = 36;
+    const bctx = base.getContext('2d')!;
+    bctx.drawImage(atlas.canvas, cx, cy, 420, 180, 0, 0, base.width, base.height);
+
+    if (!includeArms) {
+      // Some weapons rely on arm overlap for continuity; bridge the no-arms gaps.
+      const metal = (x: number, y: number, w: number, h: number): void => {
+        const g = bctx.createLinearGradient(0, y, 0, y + h);
+        g.addColorStop(0, '#5c6472');
+        g.addColorStop(0.5, '#303746');
+        g.addColorStop(1, '#191f2b');
+        bctx.fillStyle = g;
+        bctx.fillRect(x, y, w, h);
+      };
+      if (id === 'rifle') {
+        metal(17, 15, 12, 3);
+        metal(19, 18, 10, 3);
+      } else if (id === 'm249') {
+        metal(12, 15, 16, 4);
+        metal(13, 19, 14, 2);
+      }
+    }
+
+    const rim = document.createElement('canvas');
+    rim.width = base.width;
+    rim.height = base.height;
+    const rctx = rim.getContext('2d')!;
+    rctx.drawImage(base, 0, 0);
+    rctx.globalCompositeOperation = 'source-in';
+    rctx.fillStyle = 'rgba(170, 210, 255, 0.28)';
+    rctx.fillRect(0, 0, rim.width, rim.height);
+
+    const icon = document.createElement('canvas');
+    icon.width = base.width;
+    icon.height = base.height;
+    const ictx = icon.getContext('2d')!;
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        if (ox === 0 && oy === 0) continue;
+        ictx.drawImage(rim, ox, oy);
+      }
+    }
+    ictx.filter = 'brightness(1.06) contrast(1.14)';
+    ictx.drawImage(base, 0, 0);
+    ictx.filter = 'none';
+    out[id] = icon.toDataURL('image/png');
+  });
+  return out;
 }
