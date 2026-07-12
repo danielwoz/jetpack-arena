@@ -172,6 +172,8 @@ export class Ui {
   onAdmin: (patch: unknown) => void = () => {};
 
   private adminInputs = new Map<string, HTMLInputElement>();
+  private inGame = false;
+  private joinTab: 'loadout' | 'controls' | 'settings' = 'loadout';
 
   private buildAdminPanel(): void {
     const list = el<HTMLDivElement>('adminlist');
@@ -190,8 +192,13 @@ export class Ui {
       list.appendChild(sec);
       return grid;
     };
-    const addRow = (grid: HTMLDivElement, key: string, label: string,
-      value: number, send: (v: number) => unknown): void => {
+    const addRow = (
+      grid: HTMLDivElement,
+      key: string,
+      label: string,
+      value: number,
+      send: (v: number) => unknown,
+    ): void => {
       const row = document.createElement('div');
       row.className = 'tune-row';
       const lab = document.createElement('label');
@@ -215,7 +222,9 @@ export class Ui {
     const endBtn = document.createElement('button');
     endBtn.className = 'minor';
     endBtn.textContent = 'END ROUND NOW (rotates map)';
-    endBtn.addEventListener('click', () => this.onAdmin({ action: 'endRound' }));
+    endBtn.addEventListener('click', () =>
+      this.onAdmin({ action: 'endRound' }),
+    );
     actions.appendChild(endBtn);
     list.appendChild(actions);
 
@@ -227,8 +236,9 @@ export class Ui {
       if (w.melee) continue;
       const grid = section(w.name);
       for (const f of WEAPON_TUNABLE) {
-        addRow(grid, `w:${id}:${f}`, f, w[f] as number,
-          (nv) => ({ weapons: { [id]: { [f]: nv } } }));
+        addRow(grid, `w:${id}:${f}`, f, w[f] as number, (nv) => ({
+          weapons: { [id]: { [f]: nv } },
+        }));
       }
     }
   }
@@ -239,9 +249,15 @@ export class Ui {
     for (const [key, inp] of this.adminInputs) {
       if (document.activeElement === inp) continue;
       const parts = key.split(':');
-      const v = parts[0] === 'c'
-        ? (TUNE as unknown as Record<string, number>)[parts[1]]
-        : (WEAPONS[parts[1] as keyof typeof WEAPONS] as unknown as Record<string, number>)[parts[2]];
+      const v =
+        parts[0] === 'c'
+          ? (TUNE as unknown as Record<string, number>)[parts[1]]
+          : (
+              WEAPONS[parts[1] as keyof typeof WEAPONS] as unknown as Record<
+                string,
+                number
+              >
+            )[parts[2]];
       if (v !== undefined) inp.value = String(v);
     }
   }
@@ -252,6 +268,17 @@ export class Ui {
   private disconnected = el<HTMLDivElement>('disconnected');
   private nameInput = el<HTMLInputElement>('name');
   private joinBtn = el<HTMLButtonElement>('joinbtn');
+  private joinTabs = Array.from(
+    this.join.querySelectorAll<HTMLButtonElement>('.join-tab'),
+  );
+  private joinPanels: Record<
+    'loadout' | 'controls' | 'settings',
+    HTMLDivElement
+  > = {
+    loadout: el<HTMLDivElement>('join-tab-loadout'),
+    controls: el<HTMLDivElement>('join-tab-controls'),
+    settings: el<HTMLDivElement>('join-tab-settings'),
+  };
   private respawnBtn = el<HTMLButtonElement>('respawnbtn');
   private joinStatus = el<HTMLDivElement>('join-status');
 
@@ -265,8 +292,7 @@ export class Ui {
   onRespawn: (loadout: Loadout, nadeType: NadeType) => void = () => {};
   onCaptureChange: (capturing: boolean) => void = () => {};
 
-  private buildBindList(): void {
-    const list = el<HTMLDivElement>('bindlist');
+  private buildBindList(list: HTMLDivElement): void {
     list.innerHTML = '';
     for (const action of ACTIONS) {
       const row = document.createElement('div');
@@ -287,7 +313,7 @@ export class Ui {
           window.removeEventListener('keydown', capture, true);
           this.onCaptureChange(false);
           if (e.code !== 'Escape') bindings.set(action, e.code);
-          this.buildBindList();
+          this.refreshBindLists();
         };
         window.addEventListener('keydown', capture, true);
       });
@@ -296,36 +322,113 @@ export class Ui {
     }
   }
 
+  private refreshBindLists(): void {
+    this.buildBindList(el<HTMLDivElement>('bindlist'));
+    this.buildBindList(el<HTMLDivElement>('join-bindlist'));
+  }
+
+  private setJoinTab(tab: 'loadout' | 'controls' | 'settings'): void {
+    this.joinTab = tab;
+    for (const btn of this.joinTabs) {
+      const active = btn.dataset.tab === tab;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', String(active));
+    }
+    (
+      Object.keys(this.joinPanels) as Array<'loadout' | 'controls' | 'settings'>
+    ).forEach((key) => {
+      this.joinPanels[key].classList.toggle('hidden', key !== tab);
+    });
+  }
+
+  private normalizeJoinTabHeights(): void {
+    const keys: Array<'loadout' | 'controls' | 'settings'> = [
+      'loadout',
+      'controls',
+      'settings',
+    ];
+    const current = this.joinTab;
+    let maxHeight = 0;
+    for (const key of keys) {
+      this.joinPanels[key].classList.remove('hidden');
+      maxHeight = Math.max(maxHeight, this.joinPanels[key].scrollHeight);
+      if (key !== current) this.joinPanels[key].classList.add('hidden');
+    }
+    for (const key of keys) {
+      this.joinPanels[key].style.minHeight = `${maxHeight}px`;
+    }
+  }
+
+  private openControlsModal(controls: HTMLDivElement): void {
+    this.refreshBindLists();
+    controls.classList.remove('hidden');
+  }
+
   constructor() {
     const controls = el<HTMLDivElement>('controls');
-    el<HTMLButtonElement>('controlsbtn').addEventListener('click', () => {
-      this.buildBindList();
-      controls.classList.remove('hidden');
+    this.joinTabs.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        if (tab === 'loadout' || tab === 'controls' || tab === 'settings') {
+          this.setJoinTab(tab);
+        }
+      });
     });
+    this.setJoinTab('loadout');
 
     // settings: volume sliders persist; ESC toggles the panel in-game
     const settings = el<HTMLDivElement>('settings');
-    const volMusic = el<HTMLInputElement>('vol-music');
-    const volSfx = el<HTMLInputElement>('vol-sfx');
-    volMusic.value = String(Math.round(audio.musicVol * 100));
-    volSfx.value = String(Math.round(audio.sfxVol * 100));
-    volMusic.addEventListener('input', () => {
+    const volMusic = [
+      el<HTMLInputElement>('vol-music'),
+      el<HTMLInputElement>('join-vol-music'),
+    ];
+    const volSfx = [
+      el<HTMLInputElement>('vol-sfx'),
+      el<HTMLInputElement>('join-vol-sfx'),
+    ];
+    const resScale = [
+      el<HTMLInputElement>('res-scale'),
+      el<HTMLInputElement>('join-res-scale'),
+    ];
+    const syncSlider = (group: HTMLInputElement[], value: number): void => {
+      const text = String(Math.round(value));
+      for (const input of group) {
+        if (input.value !== text) input.value = text;
+      }
+    };
+
+    syncSlider(volMusic, audio.musicVol * 100);
+    syncSlider(volSfx, audio.sfxVol * 100);
+    syncSlider(resScale, getRenderScale() * 100);
+
+    const onMusic = (src: HTMLInputElement): void => {
       audio.resume();
-      audio.setMusicVol(Number(volMusic.value) / 100);
-    });
-    volSfx.addEventListener('input', () => {
+      const value = Number(src.value);
+      audio.setMusicVol(value / 100);
+      syncSlider(volMusic, value);
+    };
+    const onSfx = (src: HTMLInputElement): void => {
       audio.resume();
-      audio.setSfxVol(Number(volSfx.value) / 100);
-    });
-    const resScale = el<HTMLInputElement>('res-scale');
-    resScale.value = String(Math.round(getRenderScale() * 100));
-    resScale.addEventListener('input', () => {
-      setRenderScale(Number(resScale.value) / 100);
-    });
-    el<HTMLButtonElement>('settingsbtn').addEventListener('click', () => {
-      audio.resume();
-      settings.classList.remove('hidden');
-    });
+      const value = Number(src.value);
+      audio.setSfxVol(value / 100);
+      syncSlider(volSfx, value);
+    };
+    const onRes = (src: HTMLInputElement): void => {
+      const value = Number(src.value);
+      setRenderScale(value / 100);
+      syncSlider(resScale, value);
+    };
+
+    volMusic.forEach((input) =>
+      input.addEventListener('input', () => onMusic(input)),
+    );
+    volSfx.forEach((input) =>
+      input.addEventListener('input', () => onSfx(input)),
+    );
+    resScale.forEach((input) =>
+      input.addEventListener('input', () => onRes(input)),
+    );
+
     el<HTMLButtonElement>('setclose').addEventListener('click', () => {
       settings.classList.add('hidden');
     });
@@ -340,8 +443,7 @@ export class Ui {
     });
     el<HTMLButtonElement>('setcontrols').addEventListener('click', () => {
       settings.classList.add('hidden');
-      this.buildBindList();
-      controls.classList.remove('hidden');
+      this.openControlsModal(controls);
     });
     document.addEventListener('keydown', (e) => {
       if (e.code !== 'Escape') return;
@@ -353,6 +455,7 @@ export class Ui {
         admin.classList.add('hidden');
         return;
       }
+      if (!this.inGame) return;
       settings.classList.toggle('hidden');
     });
     el<HTMLButtonElement>('bindclose').addEventListener('click', () => {
@@ -360,10 +463,18 @@ export class Ui {
     });
     el<HTMLButtonElement>('bindreset').addEventListener('click', () => {
       bindings.reset();
-      this.buildBindList();
+      this.refreshBindLists();
     });
+    el<HTMLButtonElement>('join-bindreset').addEventListener('click', () => {
+      bindings.reset();
+      this.refreshBindLists();
+    });
+    this.refreshBindLists();
 
     buildLoadoutPicker(el('join-weapons'), this.loadout, this.nadeSel);
+    this.normalizeJoinTabHeights();
+    window.addEventListener('resize', () => this.normalizeJoinTabHeights());
+    this.join.classList.add('ready');
 
     this.nameInput.value = localStorage.getItem('callsign') ?? '';
     this.nameInput.addEventListener('keydown', (e) => {
@@ -394,6 +505,7 @@ export class Ui {
   }
 
   hideJoin(): void {
+    this.inGame = true;
     this.join.classList.add('hidden');
   }
 
@@ -403,7 +515,8 @@ export class Ui {
       ? `ELIMINATED BY ${killerName.toUpperCase()}`
       : 'YOU DIED';
     this.death.classList.remove('hidden');
-    this.respawnReadyAt = performance.now() + (instant ? 0 : RESPAWN_TICKS * TICK_MS);
+    this.respawnReadyAt =
+      performance.now() + (instant ? 0 : RESPAWN_TICKS * TICK_MS);
     this.respawnBtn.disabled = true;
 
     clearInterval(this.countdownTimer);

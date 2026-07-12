@@ -1,4 +1,3 @@
-import './style.css';
 import { FLASH_BLIND_SECS, FLASH_RADIUS, PLAYER_HH, TICK_MS } from '../shared/constants.ts';
 import { lerp } from '../shared/math.ts';
 import { NADES, WEAPONS, reloadTicks, spreadRad } from '../shared/weapons.ts';
