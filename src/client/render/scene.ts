@@ -993,41 +993,29 @@ function drawNades(r: Renderer, nades: RenderNade[], t: number): void {
 // blast craters: dark voids clipped to the terrain they were punched into
 const holePoly = new Float32Array(48);
 
-function drawHoleClipped(
-  r: Renderer, hx: number, hy: number, hr: number,
-  sx0: number, sy0: number, sx1: number, sy1: number,
-  c: RGB, a: number,
-): void {
-  // circle polygon with each vertex clamped into the rect ≈ their intersection
-  const n = 24;
-  for (let i = 0; i < n; i++) {
-    const ang = (i / n) * Math.PI * 2;
-    const px = hx + Math.cos(ang) * hr;
-    const py = hy + Math.sin(ang) * hr;
-    holePoly[i * 2] = Math.max(sx0, Math.min(sx1, px));
-    holePoly[i * 2 + 1] = Math.max(sy0, Math.min(sy1, py));
-  }
-  r.poly(holePoly, c, a);
-}
 
 function drawHoles(r: Renderer, left: number, right: number, topB: number, bottom: number, t: number): void {
   for (const h of world.holes) {
     if (h.x + h.r < left || h.x - h.r > right || h.y + h.r < topB || h.y - h.r > bottom) continue;
-    let centerInSolid = false;
-    for (const s of SOLIDS) {
-      if (s.ind || s.k === 'wall') continue;
-      if (h.x + h.r < s.x || h.x - h.r > s.x + s.w) continue;
-      if (h.y + h.r < s.y || h.y - h.r > s.y + s.h) continue;
-      const sx0 = s.x, sy0 = s.y, sx1 = s.x + s.w, sy1 = s.y + s.h;
-      // scorched rim only — the crater itself is knocked out of the terrain
-      drawHoleClipped(r, h.x, h.y, h.r * 1.06, sx0, sy0, sx1, sy1, [0.05, 0.04, 0.08], 0.55);
-      if (h.x >= sx0 && h.x <= sx1 && h.y >= sy0 && h.y <= sy1) centerInSolid = true;
+    // scorched edge: a thin ring drawn only where terrain still stands —
+    // the crater itself is genuinely knocked out, nothing overdraws it
+    const segs = 26;
+    for (let i2 = 0; i2 < segs; i2++) {
+      const a0 = (i2 / segs) * Math.PI * 2;
+      const a1 = ((i2 + 1) / segs) * Math.PI * 2;
+      const mid = (a0 + a1) / 2;
+      if (!world.solidAt(h.x + Math.cos(mid) * (h.r + 4), h.y + Math.sin(mid) * (h.r + 4))) continue;
+      r.line(
+        h.x + Math.cos(a0) * (h.r + 1), h.y + Math.sin(a0) * (h.r + 1),
+        h.x + Math.cos(a1) * (h.r + 1), h.y + Math.sin(a1) * (h.r + 1),
+        4, [0.05, 0.04, 0.08], 0.6,
+      );
     }
-    // faint ember glow deep in craters that sit inside terrain
-    if (centerInSolid) {
+    // faint ember glow on the crater floor when it still has one
+    if (world.solidAt(h.x, h.y + h.r + 8)) {
       r.setAdditive(true);
       const gl = 0.04 + 0.025 * Math.sin(t * 2 + h.x * 0.05);
-      r.glowDisc(h.x, h.y + h.r * 0.25, h.r * 0.6, [0.9, 0.4, 0.15], gl, 12);
+      r.glowDisc(h.x, h.y + h.r * 0.55, h.r * 0.55, [0.9, 0.4, 0.15], gl, 12);
       r.setAdditive(false);
     }
   }
