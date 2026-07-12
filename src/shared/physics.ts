@@ -1,6 +1,8 @@
 import { PLAYER_HW, PLAYER_HH } from './constants.ts';
 import type { Rect } from './types.ts';
 import type { World } from './world.ts';
+import { pointInSolid } from './world.ts';
+import type { MapRect } from './map.ts';
 
 
 // Sample points across the player's body: 3 columns × 5 rows, slightly
@@ -20,8 +22,8 @@ function bodySolid(
       const px = cx + sx;
       const py = cy + sy;
       for (const s of candidates) {
-        if (px >= s.x && px <= s.x + s.w && py >= s.y && py <= s.y + s.h) {
-          if (s.ind || !world.inHole(px, py)) return true;
+        if (pointInSolid(s as MapRect, px, py)) {
+          if ((s as MapRect).ind || !world.inHole(px, py)) return true;
         }
       }
     }
@@ -60,10 +62,24 @@ export function collideMove(
   // around it), ghost this tick so gravity can carry it into open space.
   const stuck = bodySolid(p.x, p.y, near, world);
 
+  // low obstacles (under 75% of the body) are stepped over while grounded
+  const STEP_UP = PLAYER_HH * 2 * 0.75;
   const stepsX = Math.max(1, Math.ceil(Math.abs(moveX) / SUBSTEP));
   for (let i = 0; i < stepsX; i++) {
     const nx = p.x + moveX / stepsX;
     if (!stuck && bodySolid(nx, p.y, near, world)) {
+      let stepped = false;
+      if (p.onGround) {
+        for (let dh = 6; dh <= STEP_UP; dh += 6) {
+          if (!bodySolid(nx, p.y - dh, near, world)) {
+            p.x = nx;
+            p.y -= dh;
+            stepped = true;
+            break;
+          }
+        }
+      }
+      if (stepped) continue;
       p.vx = 0;
       break;
     }

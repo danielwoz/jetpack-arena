@@ -35,7 +35,7 @@ export class GameAudio {
   private musicOn = false;
 
   sfxVol = clamp01(parseFloat(localStorage.getItem('vol-sfx') ?? '0.7'));
-  musicVol = clamp01(parseFloat(localStorage.getItem('vol-music') ?? '0.35'));
+  musicVol = clamp01(parseFloat(localStorage.getItem('vol-music') ?? '0.28'));
 
   // call from any user gesture; audio can't start without one
   resume(): void {
@@ -323,6 +323,7 @@ export class GameAudio {
     lp.type = 'lowpass';
     lp.frequency.value = 240;
     lp.connect(this.music);
+    this.musicNodes.push(lp);
     for (const [f, g] of [[55, 0.055], [82.5, 0.03], [55.6, 0.03]] as const) {
       const o = ctx.createOscillator();
       o.type = 'sawtooth';
@@ -332,6 +333,7 @@ export class GameAudio {
       o.connect(og);
       og.connect(lp);
       o.start();
+      this.musicNodes.push(o, og);
     }
     // slow swell so the drone breathes
     const lfo = ctx.createOscillator();
@@ -341,6 +343,7 @@ export class GameAudio {
     lfo.connect(lfoG);
     lfoG.connect(lp.frequency);
     lfo.start();
+    this.musicNodes.push(lfo, lfoG);
 
     const pluck = (): void => {
       if (ctx.state === 'running') {
@@ -363,54 +366,72 @@ export class GameAudio {
     this.pluckTimer = setTimeout(pluck, 2000);
   }
 
-  // pandora: a warm slow major-pentatonic lullaby over airy pads
+  // pandora: nature — a distant waterfall wash, birdsong, faint warm pad
   private buildPandoraMusic(): void {
     const ctx = this.ctx!;
+    // waterfall: soft looping noise, band-shaped and gently swelling
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.loop = true;
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = 700;
-    lp.connect(this.music);
-    this.musicNodes.push(lp);
-    for (const [f, g] of [[110, 0.045], [165, 0.028], [220.5, 0.02]] as const) {
-      const o = ctx.createOscillator();
-      o.type = 'sine';
-      o.frequency.value = f;
-      const og = ctx.createGain();
-      og.gain.value = g;
-      o.connect(og);
-      og.connect(lp);
-      o.start();
-      this.musicNodes.push(o, og);
-    }
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.04;
-    const lfoG = ctx.createGain();
-    lfoG.gain.value = 240;
-    lfo.connect(lfoG);
-    lfoG.connect(lp.frequency);
-    lfo.start();
-    this.musicNodes.push(lfo, lfoG);
+    lp.frequency.value = 900;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 220;
+    const wg = ctx.createGain();
+    wg.gain.value = 0.05;
+    src.connect(lp);
+    lp.connect(hp);
+    hp.connect(wg);
+    wg.connect(this.music);
+    src.start();
+    this.musicNodes.push(src, lp, hp, wg);
+    const swell = ctx.createOscillator();
+    swell.frequency.value = 0.07;
+    const swellG = ctx.createGain();
+    swellG.gain.value = 0.018;
+    swell.connect(swellG);
+    swellG.connect(wg.gain);
+    swell.start();
+    this.musicNodes.push(swell, swellG);
+    // faint warm pad so it isn't only water
+    const pad = ctx.createOscillator();
+    pad.type = 'sine';
+    pad.frequency.value = 165;
+    const padG = ctx.createGain();
+    padG.gain.value = 0.015;
+    pad.connect(padG);
+    padG.connect(this.music);
+    pad.start();
+    this.musicNodes.push(pad, padG);
 
-    const SCALE_P = [220, 247.5, 277.2, 330, 371.25, 440];
-    const pluck = (): void => {
+    // birdsong: short 2-4 note chirps with quick upward pitch flicks
+    const chirp = (): void => {
       if (ctx.state === 'running' && this.musicTheme === 'pandora') {
-        const f = SCALE_P[Math.floor(Math.random() * SCALE_P.length)];
-        const t = ctx.currentTime;
-        const o = ctx.createOscillator();
-        o.type = 'triangle';
-        o.frequency.value = f;
-        const og = ctx.createGain();
-        og.gain.setValueAtTime(0.0001, t);
-        og.gain.exponentialRampToValueAtTime(0.055, t + 1.4);
-        og.gain.exponentialRampToValueAtTime(0.0001, t + 6);
-        o.connect(og);
-        og.connect(this.music);
-        o.start(t);
-        o.stop(t + 6.1);
+        const notes = 2 + Math.floor(Math.random() * 3);
+        const base = 2200 + Math.random() * 1800;
+        let t = ctx.currentTime + 0.05;
+        for (let n = 0; n < notes; n++) {
+          const o = ctx.createOscillator();
+          o.type = 'sine';
+          const f0 = base * (0.9 + Math.random() * 0.25);
+          o.frequency.setValueAtTime(f0, t);
+          o.frequency.exponentialRampToValueAtTime(f0 * (1.15 + Math.random() * 0.3), t + 0.07);
+          const og = ctx.createGain();
+          og.gain.setValueAtTime(0.0001, t);
+          og.gain.exponentialRampToValueAtTime(0.035, t + 0.02);
+          og.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+          o.connect(og);
+          og.connect(this.music);
+          o.start(t);
+          o.stop(t + 0.14);
+          t += 0.13 + Math.random() * 0.1;
+        }
       }
-      this.pluckTimer = setTimeout(pluck, 4500 + Math.random() * 6000);
+      this.pluckTimer = setTimeout(chirp, 3000 + Math.random() * 7000);
     };
-    this.pluckTimer = setTimeout(pluck, 2500);
+    this.pluckTimer = setTimeout(chirp, 1500);
   }
 }
 

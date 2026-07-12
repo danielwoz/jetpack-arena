@@ -1,11 +1,14 @@
 import { WORLD_H, WORLD_W } from './constants.ts';
 import type { Rect } from './types.ts';
+import { ROCK_MASKS } from './rockmasks.ts';
 
 // Solid kinds drive tinting only; collision treats them all the same.
 export type SolidKind = 'ground' | 'rock' | 'plat' | 'boulder' | 'wall';
 
 export interface MapRect extends Rect {
   k: SolidKind;
+  cell?: number;       // which rock sprite this boulder is (pandora)
+  mask?: number[];     // per-column opaque spans — collision matches pixels
 }
 
 function r(x: number, y: number, w: number, h: number, k: SolidKind): MapRect {
@@ -139,10 +142,14 @@ function buildPandora(): { solids: MapRect[]; spawns: { x: number; y: number }[]
     const top = Math.round(hillTop(x + STEP / 2));
     solids.push(r(x, top, STEP + 2, 2935 - top, 'ground'));
   }
-  // floating rock islands: the hitbox is the wide upper body of the rock;
-  // the tapering underside of the sprite dangles below without collision
+  // floating rock islands: each takes a rock sprite (round-robin) and its
+  // hitbox is that sprite's opaque pixels via the generated column mask
+  let bi = 0;
   const B = (x: number, y: number, w: number): void => {
-    solids.push(r(x, y, w, Math.round(w / 2.4), 'boulder'));
+    const cell = ROCK_MASKS.length > 0 ? bi++ % ROCK_MASKS.length : undefined;
+    const m = cell !== undefined ? ROCK_MASKS[cell] : undefined;
+    const h = Math.round(w / (m?.aspect ?? 1.45));
+    solids.push({ ...r(x, y, w, h, 'boulder'), cell, mask: m?.spans });
   };
   // low hops
   B(500, 2380, 260); B(1450, 2300, 300); B(2400, 2420, 240); B(3300, 2280, 320);

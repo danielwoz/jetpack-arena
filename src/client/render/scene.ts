@@ -640,20 +640,11 @@ function drawPandoraBoulder(r: Renderer, s: MapRect): boolean {
   if (!pandoraReady() || !PD_META) return false;
   const cells = PD_META.rocks;
   if (!cells || cells.length === 0) return false;
-  // pick the cell whose shape best matches this hitbox, then draw it flush:
-  // the rect IS the rock; only dangling roots may spill past the bottom
-  const want = s.w / s.h;
-  let c = cells[0];
-  let bestD = Infinity;
-  const start = Math.abs((s.x * 31 + s.y * 7) | 0) % cells.length;
-  for (let k = 0; k < cells.length; k++) {
-    const cand = cells[(start + k) % cells.length];
-    const d = Math.abs(cand.aspect - want) + k * 0.02;   // slight variety bias
-    if (d < bestD) { bestD = d; c = cand; }
-  }
-  const h = s.w / c.aspect;
+  // the map assigned this boulder its sprite; the rect matches the sprite's
+  // bounds and collision follows its opaque pixels — draw it exactly flush
+  const c = cells[(s.cell ?? 0) % cells.length];
   r.setTexture(PD_FLORA);
-  r.texQuadUV(s.x, s.y, s.w, Math.max(h, s.h), c.u0, c.v0, c.u1, c.v1, [1, 1, 1], [0.75, 0.8, 0.8]);
+  r.texQuadUV(s.x, s.y, s.w, s.h, c.u0, c.v0, c.u1, c.v1, [1, 1, 1], [0.75, 0.8, 0.8]);
   r.setTexture(null);
   return true;
 }

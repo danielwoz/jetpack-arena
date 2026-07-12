@@ -1,5 +1,16 @@
 import { MAX_HOLES } from './constants.ts';
 import { SOLIDS } from './map.ts';
+import type { MapRect } from './map.ts';
+import { ROCK_MASK_COLS } from './rockmasks.ts';
+
+// point-in-solid that honors per-column pixel masks (pandora rocks)
+export function pointInSolid(s: MapRect, x: number, y: number): boolean {
+  if (x < s.x || x > s.x + s.w || y < s.y || y > s.y + s.h) return false;
+  if (!s.mask) return true;
+  const col = Math.min(ROCK_MASK_COLS - 1, Math.max(0, Math.floor((x - s.x) / s.w * ROCK_MASK_COLS)));
+  const v = (y - s.y) / s.h;
+  return v >= s.mask[col * 2] && v <= s.mask[col * 2 + 1];
+}
 import type { Hole } from './types.ts';
 
 // Dynamic world state: grenade craters punched into destructible terrain.
@@ -75,7 +86,7 @@ export class World {
   // Is there solid material at this point? Holes only void destructible rects.
   solidAt(x: number, y: number): boolean {
     for (const s of SOLIDS) {
-      if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) {
+      if (pointInSolid(s, x, y)) {
         if (s.ind) return true;
         if (!this.inHole(x, y)) return true;
       }
