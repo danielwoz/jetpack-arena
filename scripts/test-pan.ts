@@ -15,7 +15,7 @@ function makePlayer(id: number, x: number, y: number, weapon: WeaponId, aim: num
     jetU: false, jetD: false, heat: 0, fireLatch: false,
     burst: 0, burstCd: 0, stall: 0, sinceBurst: 600,
     slots: ['rifle', 'shotgun', weapon] as Loadout, slotIdx: 2,
-    ammoS: [30, 6, 1], magsS: [2, 2, 0], apexY: y, nadeType: 'frag',
+    ammoS: [30, 6, 1], magsS: [2, 2, 0], bandages: 5, apexY: y, nadeType: 'frag',
   };
   return {
     id, name: `p${id}`, state, kills: 0, deaths: 0, assists: 0, dmg: 0,

@@ -5,6 +5,7 @@ import {
   RESPAWN_TICKS,
 } from '../shared/constants.ts';
 import { applyDamage } from '../shared/step.ts';
+import { TUNE } from '../shared/tuning.ts';
 import { SOLIDS } from '../shared/map.ts';
 import { clamp, dist } from '../shared/math.ts';
 import { rayVsRect, rayVsSolids } from '../shared/physics.ts';
@@ -47,10 +48,11 @@ export interface CombatWorld {
 
 export function kill(world: CombatWorld, attacker: CombatPlayer, victim: CombatPlayer, weapon: PlayerState['weapon'] | 'grenade' | 'fall' | 'fire'): void {
   if (attacker !== victim) {
-    attacker.state.armor = Math.min(MAX_ARMOR, attacker.state.armor + ARMOR_PER_KILL);
-    attacker.state.nades = Math.min(MAX_NADES, attacker.state.nades + 1);
-    attacker.state.magsS[0] = Math.min(MAX_MAGS, attacker.state.magsS[0] + 1);
-    attacker.state.magsS[1] = Math.min(MAX_MAGS, attacker.state.magsS[1] + 1);
+    attacker.state.armor = Math.min(MAX_ARMOR, attacker.state.armor + TUNE.armorPerKill);
+    attacker.state.nades = Math.min(MAX_NADES, attacker.state.nades + TUNE.nadesPerKill);
+    attacker.state.magsS[0] = Math.min(TUNE.magsMax, attacker.state.magsS[0] + 1);
+    attacker.state.magsS[1] = Math.min(TUNE.magsMax, attacker.state.magsS[1] + 1);
+    attacker.state.bandages = Math.min(9, attacker.state.bandages + TUNE.bandagesPerKill);
   }
   victim.state.alive = false;
   victim.deaths++;
@@ -214,8 +216,8 @@ function hitPlayer(world: CombatWorld, b: Bullet, victim: CombatPlayer, hitY: nu
   const rel = hitY - victim.state.y;
   const headshot = rel < -HEAD_ZONE;
   let dmg = w.damage * falloffMult(b.weapon, b.dist);
-  if (headshot) dmg *= w.headshotMult ?? HEADSHOT_MULT;
-  else if (rel > LEG_ZONE) dmg *= LEG_MULT;
+  if (headshot) dmg *= w.headshotMult ?? TUNE.headshotMult;
+  else if (rel > LEG_ZONE) dmg *= TUNE.legMult;
   dmg = Math.max(1, Math.round(dmg));
   applyDamage(victim.state, dmg);
   const shooter = [...world.allPlayers()].find((p) => p.id === b.owner) ?? null;

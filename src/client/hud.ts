@@ -21,6 +21,7 @@ export class Hud {
   private reloadText = el<HTMLSpanElement>('reloadtext');
   private healText = el<HTMLSpanElement>('healtext');
   private nadesEl = el<HTMLDivElement>('nades');
+  private bandText = el<HTMLSpanElement>('bandtext');
   private statsEl = el<HTMLDivElement>('stats');
   private topFourEl = el<HTMLDivElement>('topfour');
   private roundEl = el<HTMLDivElement>('roundtimer');
@@ -106,6 +107,9 @@ export class Hud {
       html += `<div class="${cls}"></div>`;
     }
     if (this.nadesEl.innerHTML !== html) this.nadesEl.innerHTML = html;
+
+    this.bandText.textContent = `Q BANDAGES ×${state.bandages}`;
+    this.bandText.classList.toggle('empty', state.bandages <= 0);
 
     void rtt;
   }

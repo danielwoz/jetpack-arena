@@ -8,6 +8,7 @@ import {
 import type { Loadout, NadeType, WeaponId } from '../shared/types.ts';
 import { ACTIONS, ACTION_LABELS, bindings } from './bindings.ts';
 import { audio } from './audio.ts';
+import { TUNE, WEAPON_TUNABLE } from '../shared/tuning.ts';
 
 function el<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -167,6 +168,74 @@ function buildLoadoutPicker(
 }
 
 export class Ui {
+  onAdmin: (patch: unknown) => void = () => {};
+
+  private adminInputs = new Map<string, HTMLInputElement>();
+
+  private buildAdminPanel(): void {
+    const list = el<HTMLDivElement>('adminlist');
+    list.innerHTML = '';
+    this.adminInputs.clear();
+
+    const section = (title: string): HTMLDivElement => {
+      const sec = document.createElement('div');
+      sec.className = 'tune-section';
+      const h = document.createElement('h4');
+      h.textContent = title;
+      sec.appendChild(h);
+      const grid = document.createElement('div');
+      grid.className = 'tune-grid';
+      sec.appendChild(grid);
+      list.appendChild(sec);
+      return grid;
+    };
+    const addRow = (grid: HTMLDivElement, key: string, label: string,
+      value: number, send: (v: number) => unknown): void => {
+      const row = document.createElement('div');
+      row.className = 'tune-row';
+      const lab = document.createElement('label');
+      lab.textContent = label;
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.step = 'any';
+      inp.value = String(value);
+      inp.addEventListener('change', () => {
+        const v = Number(inp.value);
+        if (Number.isFinite(v)) this.onAdmin(send(v));
+      });
+      row.appendChild(lab);
+      row.appendChild(inp);
+      grid.appendChild(row);
+      this.adminInputs.set(key, inp);
+    };
+
+    const game = section('GAME');
+    for (const [k, v] of Object.entries(TUNE)) {
+      addRow(game, `c:${k}`, k, v as number, (nv) => ({ consts: { [k]: nv } }));
+    }
+    for (const [id, w] of Object.entries(WEAPONS)) {
+      if (w.melee) continue;
+      const grid = section(w.name);
+      for (const f of WEAPON_TUNABLE) {
+        addRow(grid, `w:${id}:${f}`, f, w[f] as number,
+          (nv) => ({ weapons: { [id]: { [f]: nv } } }));
+      }
+    }
+  }
+
+  // reflect tune broadcasts into the panel without stomping active edits
+  refreshAdmin(): void {
+    if (this.adminInputs.size === 0) return;
+    for (const [key, inp] of this.adminInputs) {
+      if (document.activeElement === inp) continue;
+      const parts = key.split(':');
+      const v = parts[0] === 'c'
+        ? (TUNE as unknown as Record<string, number>)[parts[1]]
+        : (WEAPONS[parts[1] as keyof typeof WEAPONS] as unknown as Record<string, number>)[parts[2]];
+      if (v !== undefined) inp.value = String(v);
+    }
+  }
+
   private join = el<HTMLDivElement>('join');
   private death = el<HTMLDivElement>('death');
   private deathMsg = el<HTMLHeadingElement>('deathmsg');
@@ -245,6 +314,15 @@ export class Ui {
     el<HTMLButtonElement>('setclose').addEventListener('click', () => {
       settings.classList.add('hidden');
     });
+    const admin = el<HTMLDivElement>('admin');
+    el<HTMLButtonElement>('adminbtn').addEventListener('click', () => {
+      settings.classList.add('hidden');
+      this.buildAdminPanel();
+      admin.classList.remove('hidden');
+    });
+    el<HTMLButtonElement>('adminclose').addEventListener('click', () => {
+      admin.classList.add('hidden');
+    });
     el<HTMLButtonElement>('setcontrols').addEventListener('click', () => {
       settings.classList.add('hidden');
       this.buildBindList();
@@ -254,6 +332,10 @@ export class Ui {
       if (e.code !== 'Escape') return;
       if (!controls.classList.contains('hidden')) {
         controls.classList.add('hidden');
+        return;
+      }
+      if (!admin.classList.contains('hidden')) {
+        admin.classList.add('hidden');
         return;
       }
       settings.classList.toggle('hidden');

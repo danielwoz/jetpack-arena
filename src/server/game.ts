@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import type { WebSocket } from 'ws';
 import {
-  AFTERBURN_TICKS, SPAWN_MAGS, BURN_DPS, DT, FIRE_PATCH_R, FIRE_PATCH_TICKS,
+  AFTERBURN_TICKS, BURN_DPS, DT, FIRE_PATCH_R, FIRE_PATCH_TICKS,
   FLASH_BLIND_SECS, FLASH_RADIUS,
   FUEL_MAX, GRAVITY, INPUT_QUEUE_CAP, MAX_FALL_SPEED, MAX_HP,
   MAX_NAME_LEN, MAX_PLAYERS, MIN_PLAYERS, NADE_BOUNCE, NADE_COUNT,
@@ -13,6 +13,7 @@ import { SOLIDS, SPAWN_POINTS } from '../shared/map.ts';
 import { rayVsSolids } from '../shared/physics.ts';
 import { dist } from '../shared/math.ts';
 import { applyDamage, stepPlayer } from '../shared/step.ts';
+import { TUNE, applyTune, tuneSnapshot } from '../shared/tuning.ts';
 import { DEFAULT_LOADOUT, NADES, SLOT_OPTIONS, WEAPONS, isNadeType, validLoadout } from '../shared/weapons.ts';
 import { World } from '../shared/world.ts';
 import type { GameEvent, InputCmd, Loadout, NadeType, NetFire, NetNade, NetPlayer, PlayerState, WeaponId } from '../shared/types.ts';
@@ -107,7 +108,8 @@ function blankState(loadout: Loadout, nadeType: NadeType): PlayerState {
     weapon: loadout[0], ammo: WEAPONS[loadout[0]].mag,
     slots: [...loadout] as Loadout, slotIdx: 0,
     ammoS: [WEAPONS[loadout[0]].mag, WEAPONS[loadout[1]].mag, WEAPONS[loadout[2]].mag],
-    magsS: [SPAWN_MAGS, SPAWN_MAGS, 0],
+    magsS: [TUNE.magsSpawn, TUNE.magsSpawn, 0],
+    bandages: TUNE.bandagesSpawn,
     reload: 0, cd: 0, onGround: false,
     bandage: 0, prime: 0, nades: NADE_COUNT, nadeLatch: false, jetU: false, jetD: false,
     heat: 0, fireLatch: false, burst: 0, burstCd: 0, stall: 0, sinceBurst: 600,
@@ -200,6 +202,7 @@ export class GameRoom {
         conn.send(JSON.stringify({
           t: 'welcome', id: player.id, tick: this.tick, holes: this.world.holes,
           theme: process.env.THEME ?? 'city',
+          tune: tuneSnapshot(),
         }));
         console.log(`[join] #${player.id} ${name} (${loadout.join('/')})${lag ? ` lag=${lag}ms` : ''} — ${this.players.size} online`);
         return;
@@ -220,6 +223,14 @@ export class GameRoom {
             player.wantsRespawn = true;
           }
           break;
+        case 'admin': {
+          // live tuning: open to every player for now, by design
+          applyTune(msg.data);
+          const state = JSON.stringify({ t: 'tune', data: tuneSnapshot() });
+          for (const q of this.players.values()) q.conn?.send(state);
+          console.log(`[admin] ${player.name} changed live tuning`);
+          break;
+        }
         case 'pong': {
           const sentAt = player.pings.get(msg.id);
           if (sentAt !== undefined) {
@@ -415,7 +426,7 @@ export class GameRoom {
         if (!q.state.alive || q.state.onGround || this.tick < q.protUntil) continue;
         const d = dist(x, y, q.state.x, q.state.y);
         if (d < NADE_SHOCK_R && d > 1) {
-          const k = NADE_SHOCK_PUSH * (1 - d / NADE_SHOCK_R);
+          const k = TUNE.nadeShockPush * (1 - d / NADE_SHOCK_R);
           q.state.vx += ((q.state.x - x) / d) * k;
           q.state.vy += ((q.state.y - y) / d) * k;
         }
@@ -565,9 +576,11 @@ export class GameRoom {
       sum += p.kills / Math.max(1, p.deaths);
     }
     const kd = humans > 0 ? sum / humans : 0;
-    const t = Math.min(1, Math.max(0, (kd - 1) / 4));
-    this.botAcc = 0.2 + 0.4 * t;
-    this.botReactTicks = Math.round(48 - 24 * t);
+    const span = Math.max(0.01, TUNE.botKdHard - TUNE.botKdEasy);
+    const t = Math.min(1, Math.max(0, (kd - TUNE.botKdEasy) / span));
+    this.botAcc = TUNE.botAccEasy + (TUNE.botAccHard - TUNE.botAccEasy) * t;
+    const ms = TUNE.botReactMsEasy + (TUNE.botReactMsHard - TUNE.botReactMsEasy) * t;
+    this.botReactTicks = Math.max(1, Math.round(ms / TICK_MS));
   }
 
   // ---- bot navigation: coarse grid + A*, bots patrol map edge to edge

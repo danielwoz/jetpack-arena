@@ -1,6 +1,7 @@
 import { INTERP_DELAY_TICKS, TICK_MS } from '../shared/constants.ts';
 import type { C2S, InputCmd, Loadout, NadeType, S2C, Snapshot } from '../shared/types.ts';
 import { world } from './world.ts';
+import { applyTune } from '../shared/tuning.ts';
 
 function serverUrl(): string {
   const lag = new URLSearchParams(location.search).get('lag');
@@ -16,6 +17,7 @@ export class Net {
   myId = -1;
   theme = 'city';
   onSnap: (s: Snapshot) => void = () => {};
+  onTune: () => void = () => {};
   onClose: () => void = () => {};
 
   private ws!: WebSocket;
@@ -41,6 +43,7 @@ export class Net {
         try { msg = JSON.parse(ev.data as string) as S2C; } catch { return; }
         switch (msg.t) {
           case 'welcome':
+            applyTune(msg.tune);
             net.theme = msg.theme ?? 'city';
             net.myId = msg.id;
             net.estTick = msg.tick;
@@ -54,6 +57,10 @@ export class Net {
             break;
           case 'ping':
             net.send({ t: 'pong', id: msg.id });
+            break;
+          case 'tune':
+            applyTune(msg.data);
+            net.onTune();
             break;
           case 'snap':
             net.syncClock(msg.tick);
@@ -79,6 +86,10 @@ export class Net {
 
   sendInput(cmd: InputCmd): void {
     this.send({ t: 'in', cmd });
+  }
+
+  sendAdmin(data: unknown): void {
+    this.send({ t: 'admin', data });
   }
 
   sendRespawn(loadout: Loadout, nadeType: NadeType): void {

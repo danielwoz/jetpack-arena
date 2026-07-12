@@ -45,6 +45,7 @@ export class Predictor {
       slotIdx: self.slotIdx,
       ammoS: [...self.ammoS] as typeof self.ammoS,
       magsS: [...self.magsS] as typeof self.magsS,
+      bandages: self.bandages,
       apexY: self.apexY, nadeType: self.nadeType,
     };
 

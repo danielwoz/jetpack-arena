@@ -9,6 +9,7 @@ import {
 import { SPAWN_POINTS } from './map.ts';
 import { collideMove } from './physics.ts';
 import { NADES, WEAPONS, cooldownTicks, reloadTicks } from './weapons.ts';
+import { TUNE } from './tuning.ts';
 import type { InputCmd, PlayerState, Rect } from './types.ts';
 import type { World } from './world.ts';
 
@@ -63,10 +64,10 @@ export function stepPlayer(
   const w = WEAPONS[p.weapon];
   const jetsHot = (cmd.up || cmd.dn) && p.fuel > 0;
   const sprinting = cmd.sprint && (p.onGround || jetsHot);
-  const maxRun = MAX_RUN * w.moveMult * (sprinting ? SPRINT_MULT : 1);
+  const maxRun = MAX_RUN * w.moveMult * (sprinting ? TUNE.sprintMult : 1);
 
   if (cmd.mx !== 0) {
-    const accel = (p.onGround ? RUN_ACCEL : AIR_ACCEL) * (sprinting ? SPRINT_MULT : 1);
+    const accel = (p.onGround ? RUN_ACCEL : AIR_ACCEL) * (sprinting ? TUNE.sprintMult : 1);
     // accelerate up to the cap, but never brake momentum already above it
     const nv = p.vx + cmd.mx * accel * DT;
     if (Math.abs(nv) <= maxRun || Math.abs(nv) < Math.abs(p.vx)) p.vx = nv;
@@ -84,8 +85,8 @@ export function stepPlayer(
   p.jetU = false;
   p.jetD = false;
   const boost = cmd.sprint;      // shift: overdrive thrust at triple burn
-  const thrustMult = boost ? OVERDRIVE_THRUST_MULT : 1;
-  const drain = FUEL_DRAIN * (boost ? OVERDRIVE_DRAIN_MULT : 1);
+  const thrustMult = boost ? TUNE.overdriveThrustMult : 1;
+  const drain = TUNE.fuelDrain * (boost ? TUNE.overdriveDrainMult : 1);
   if (cmd.up && p.fuel > 0) {
     const upCap = boost ? OVERDRIVE_UP_SPEED : MAX_UP_SPEED;
     if (p.vy > -upCap) p.vy = Math.max(-upCap, p.vy - JET_ACCEL * thrustMult * DT);
@@ -101,7 +102,7 @@ export function stepPlayer(
     p.regenWait--;
   } else if (p.onGround) {
     // the pack only refuels with boots on the ground
-    p.fuel = Math.min(FUEL_MAX, p.fuel + FUEL_REGEN * FUEL_REGEN_GROUND_MULT * DT);
+    p.fuel = Math.min(FUEL_MAX, p.fuel + TUNE.fuelRegen * TUNE.fuelRegenGroundMult * DT);
   }
 
   const fallCap = p.jetD ? MAX_DIVE_SPEED : MAX_FALL_SPEED;
@@ -116,9 +117,9 @@ export function stepPlayer(
   if (!p.onGround) {
     p.apexY = Math.min(p.apexY, p.y);
   } else {
-    if (wasAir && impactVy > FALL_SOFT_VY) {
+    if (wasAir && impactVy > TUNE.fallSoftVy) {
       fellDmg = Math.round(Math.min(100,
-        (impactVy - FALL_SOFT_VY) / (FALL_LETHAL_VY - FALL_SOFT_VY) * 100));
+        (impactVy - TUNE.fallSoftVy) / Math.max(1, TUNE.fallLethalVy - TUNE.fallSoftVy) * 100));
       if (fellDmg > 0) applyDamage(p, fellDmg);
     }
     p.apexY = p.y;
@@ -150,9 +151,12 @@ export function stepPlayer(
   // bandage channel: 1 s hands-off-the-trigger, then +20 hp
   if (p.bandage > 0) {
     p.bandage--;
-    if (p.bandage === 0) p.hp = Math.min(MAX_HP, p.hp + BANDAGE_HEAL);
+    if (p.bandage === 0) p.hp = Math.min(MAX_HP, p.hp + TUNE.bandageHeal);
   } else if (cmd.heal && p.hp < MAX_HP && p.prime === 0) {
-    p.bandage = BANDAGE_TICKS;
+    if (p.bandages > 0) {
+      p.bandages--;
+      p.bandage = BANDAGE_TICKS;
+    }
   }
 
   // grenade priming: fuse runs from the moment E is pressed

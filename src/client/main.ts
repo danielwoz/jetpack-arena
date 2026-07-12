@@ -145,6 +145,8 @@ function onSnapshot(snap: Snapshot): void {
     if (!started) {
       started = true;
       setSceneTheme(net!.theme, renderer);
+      ui.onAdmin = (patch) => net!.sendAdmin(patch);
+      net!.onTune = () => ui.refreshAdmin();
       wasAlive = self.alive;
       ui.hideJoin();
       hud.show();

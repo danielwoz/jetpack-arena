@@ -71,7 +71,8 @@ export interface PlayerState {
   slots: Loadout;      // the three carried weapons
   slotIdx: number;     // which slot is in hand (weapon === slots[slotIdx])
   ammoS: [number, number, number];
-  magsS: [number, number, number]; // reserve magazines (slot 3 ignored: unlimited)  // stowed ammo per slot
+  magsS: [number, number, number]; // reserve magazines (slot 3 ignored: unlimited)
+  bandages: number;    // heals carried (kills add more)  // stowed ammo per slot
   apexY: number;       // highest point reached since last grounded (fall damage)
   nadeType: NadeType;  // which grenade this loadout carries
 }
@@ -129,13 +130,15 @@ export interface Snapshot {
 }
 
 export type C2S =
+  | { t: 'admin'; data: unknown }
   | { t: 'join'; name: string; loadout: Loadout; nadeType: NadeType }
   | { t: 'in'; cmd: InputCmd }
   | { t: 'respawn'; loadout: Loadout; nadeType: NadeType }
   | { t: 'pong'; id: number };
 
 export type S2C =
-  | { t: 'welcome'; id: number; tick: number; holes: Hole[]; theme?: string }
+  | { t: 'welcome'; id: number; tick: number; holes: Hole[]; theme?: string; tune?: unknown }
+  | { t: 'tune'; data: unknown }
   | Snapshot
   | { t: 'ping'; id: number }
   | { t: 'reject'; reason: string };

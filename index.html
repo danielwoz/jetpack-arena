@@ -30,6 +30,7 @@
       <span id="reloadtext" class="hidden">RELOADING</span>
       <span id="healtext" class="hidden">BANDAGING</span>
       <div id="nades"></div>
+      <span id="bandtext"></span>
     </div>
     <div id="scoreboard" class="hidden"></div>
   </div>
@@ -78,7 +79,17 @@
       <div class="setrow"><span>MUSIC</span><input type="range" id="vol-music" min="0" max="100" /></div>
       <div class="setrow"><span>EFFECTS</span><input type="range" id="vol-sfx" min="0" max="100" /></div>
       <button id="setcontrols" class="minor">INPUT / KEY BINDINGS</button>
+      <button id="adminbtn" class="minor">ADMIN</button>
       <button id="setclose">DONE</button>
+    </div>
+  </div>
+
+  <div id="admin" class="screen hidden">
+    <div class="panel" style="max-width: 1100px">
+      <h2 style="color:#ffb27a">LIVE TUNING</h2>
+      <p class="sub">changes apply instantly to the server and every player on it</p>
+      <div id="adminlist"></div>
+      <button id="adminclose">DONE</button>
     </div>
   </div>
 

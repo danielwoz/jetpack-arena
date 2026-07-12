@@ -700,3 +700,26 @@ button.minor {
   width: 18px;
   height: 2px;
 }
+
+/* ---------- live tuning (admin) ---------- */
+#adminlist {
+  max-height: 62vh; overflow-y: auto; text-align: left;
+  display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px;
+}
+.tune-section h4 {
+  font-size: 11px; letter-spacing: 3px; color: #566187;
+  border-bottom: 1px solid #1d2946; padding-bottom: 4px; margin-bottom: 8px;
+}
+.tune-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 6px 14px;
+}
+.tune-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tune-row label { font-size: 11px; color: #93a3c9; overflow: hidden; text-overflow: ellipsis; }
+.tune-row input {
+  width: 74px; padding: 3px 6px; font-size: 12px; text-align: right;
+  background: #0a0d1c; color: #dfe6f5; border: 1px solid #34456e; border-radius: 4px;
+}
+.tune-row input:focus { border-color: #5b82e8; outline: none; }
+#bandtext { display: block; font-size: 11px; letter-spacing: 2px; color: #7aa5c9; margin-top: 3px; }
+#bandtext.empty { color: #566187; }

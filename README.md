@@ -50,7 +50,7 @@ Connects headless players that wander, jet around, and shoot back.
 | Mouse | aim (360°) |
 | Left click | fire |
 | R | reload |
-| Q | bandage — 1 s channel, +20 hp, can't shoot meanwhile |
+| Q | bandage — 1 s channel, +20 hp; spawn with 5, +1 per kill |
 | E (hold) | prime a grenade — fuse runs from the press; release to throw |
 | Tab (hold) | scoreboard |
 
@@ -61,7 +61,11 @@ A red ring marks your soldier for the first two seconds after every spawn.
 A minimap above the health bar tracks every combatant — you in green,
 everyone else in orange.
 
-All keys are rebindable (CONTROLS on the join screen). SETTINGS — on the
+All keys are rebindable (CONTROLS on the join screen). ESC → SETTINGS →
+ADMIN opens live tuning: fall damage, jet fuel rates, sprint multipliers,
+every weapon stat, bot difficulty, bandage economy and more — changes apply
+instantly to the server and every connected player (open to all players for
+now, and reset to defaults on server restart). SETTINGS — on the
 join screen or ESC in-game — has separate volume sliders for the music and
 the effects. All audio is synthesized in the browser: per-weapon gunshots,
 explosions, hit thuds, your jetpack, and a soft, sinister ambient score.
