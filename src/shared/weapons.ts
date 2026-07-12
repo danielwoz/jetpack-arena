@@ -28,6 +28,7 @@ export interface WeaponDef {
   burst?: BurstCfg;            // burst-only trigger group (MK47)
   melee?: { range: number; arcDeg: number };   // swung, not fired
   falloff?: { end: number; floor: number };   // damage decays linearly to floor at end
+  headshotMult?: number;       // overrides the global headshot multiplier
 }
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
@@ -45,7 +46,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     speed: 4800, heatPerShot: 0.1, heatMax: 4.0, heatDecay: 3,
     mag: 40, reloadSec: 0.43, moveMult: 1.0,
     color: [0.85, 1.0, 0.6],
-    muzzleLen: 44, falloff: { end: 1100, floor: 0.25 },
+    muzzleLen: 44, falloff: { end: 1100, floor: 0.25 }, headshotMult: 1.25,
   },
   mp5: {
     name: 'MP5', role: 'laser-stable — lightest touch, lighter hits',
@@ -53,15 +54,15 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     speed: 4800, heatPerShot: 0.1, heatMax: 4.0, heatDecay: 3,
     mag: 40, reloadSec: 0.43, moveMult: 1.0,
     color: [0.7, 1.0, 0.75],
-    muzzleLen: 42, falloff: { end: 1100, floor: 0.25 },
+    muzzleLen: 42, falloff: { end: 1100, floor: 0.25 }, headshotMult: 1.25,
   },
   mac10: {
     name: 'MAC-10', role: 'a 30-round sneeze — double rate, wild kick',
-    damage: 21, pellets: 1, rpm: 1200, spreadDeg: 3.2,
+    damage: 17, pellets: 1, rpm: 1200, spreadDeg: 3.2,
     speed: 4600, heatPerShot: 0.1, heatMax: 4.0, heatDecay: 3,
     mag: 30, reloadSec: 0.48, moveMult: 1.02,
     color: [1.0, 0.9, 0.5],
-    muzzleLen: 34, falloff: { end: 1100, floor: 0.25 },
+    muzzleLen: 34, falloff: { end: 1100, floor: 0.25 }, headshotMult: 1.25,
   },
   rifle: {
     name: 'M4A1', role: 'all-rounder — recoil builds as you spray',

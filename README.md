@@ -97,7 +97,7 @@ freely, even two of the same) plus a sidearm:
 |---|---|---|---|---|---|
 | 1·2 | UMP45 | 21 × 1 | 600 | 40 | steady SMG, low recoil |
 | 1·2 | MP5 | 18 × 1 | 600 | 40 | laser-stable, lighter hits |
-| 1·2 | MAC-10 | 21 × 1 | 1200 | 30 | double-rate sneeze, wild kick |
+| 1·2 | MAC-10 | 17 × 1 | 1200 | 30 | double-rate sneeze, wild kick |
 | 1·2 | M4A1 | 27 × 1 | 540 | 30 | all-rounder — recoil builds as you spray |
 | 1·2 | AK-47 | 32 × 1 | 430 | 30 | harder-hitting, slower, kickier than the M4A1 |
 | 1·2 | Mutant MK47 | 34 × 1 | burst | 30 | 3-round bursts; click up to 300 bpm — hammer faster and it jams for 0.6 s |
@@ -110,7 +110,7 @@ freely, even two of the same) plus a sidearm:
 
 SMG rounds shed energy over distance — down to a quarter of listed damage by
 the edge of the screen; shotgun pellets drop to half by the end of their
-700-unit reach. **Headshots deal 1.5× damage** (heads are large) and leg
+700-unit reach. **Headshots deal 1.5× damage** (1.25× from SMGs; heads are large) and leg
 hits 30% less, so aim for the chest. Your feet are your stability: shots
 fired standing on the ground have zero recoil bloom, while airborne spray
 blooms exponentially (SMGs heat at a third of the rifles' rate); hold **right-click** for a 2× magnifier

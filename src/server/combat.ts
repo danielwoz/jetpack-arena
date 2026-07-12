@@ -214,7 +214,7 @@ function hitPlayer(world: CombatWorld, b: Bullet, victim: CombatPlayer, hitY: nu
   const rel = hitY - victim.state.y;
   const headshot = rel < -HEAD_ZONE;
   let dmg = w.damage * falloffMult(b.weapon, b.dist);
-  if (headshot) dmg *= HEADSHOT_MULT;
+  if (headshot) dmg *= w.headshotMult ?? HEADSHOT_MULT;
   else if (rel > LEG_ZONE) dmg *= LEG_MULT;
   dmg = Math.max(1, Math.round(dmg));
   applyDamage(victim.state, dmg);
