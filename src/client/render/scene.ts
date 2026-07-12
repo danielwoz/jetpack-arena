@@ -830,7 +830,7 @@ interface SoldierPose {
   id: number; name: string; x: number; y: number; aim: number;
   weapon: WeaponId; vx: number; onGround: boolean;
   jetU: boolean; jetD: boolean; priming: boolean; healing: boolean;
-  bandageT: number; dizzy: boolean;
+  bandageT: number; reloadT: number; dizzy: boolean;
   prot: boolean; accent: RGB;
 }
 
@@ -933,19 +933,23 @@ function drawSoldier(r: Renderer, p: SoldierPose, dt: number, t: number, tex: Sc
   }
 
   // ---- own bandage: a ring drawn clockwise around the player as it channels
-  if (p.bandageT > 0) {
-    const R = 42;
-    const segs = 36;
-    const filled = Math.floor(p.bandageT * segs);
-    for (let i = 0; i < filled; i++) {
-      const a0 = -Math.PI / 2 + (i / segs) * Math.PI * 2;
-      const a1 = -Math.PI / 2 + ((i + 1) / segs) * Math.PI * 2;
-      r.line(
-        p.x + Math.cos(a0) * R, p.y + Math.sin(a0) * R,
-        p.x + Math.cos(a1) * R, p.y + Math.sin(a1) * R,
-        3, [0.35, 1, 0.6], 0.9,
-      );
-    }
+  drawProgressRing(r, p.x, p.y, 42, p.bandageT, [0.35, 1, 0.6]);
+  // ---- own reload: same idea, a larger white ring
+  drawProgressRing(r, p.x, p.y, 52, p.reloadT, [1, 1, 1]);
+}
+
+function drawProgressRing(r: Renderer, x: number, y: number, R: number, t: number, color: RGB): void {
+  if (t <= 0) return;
+  const segs = 36;
+  const filled = Math.floor(t * segs);
+  for (let i = 0; i < filled; i++) {
+    const a0 = -Math.PI / 2 + (i / segs) * Math.PI * 2;
+    const a1 = -Math.PI / 2 + ((i + 1) / segs) * Math.PI * 2;
+    r.line(
+      x + Math.cos(a0) * R, y + Math.sin(a0) * R,
+      x + Math.cos(a1) * R, y + Math.sin(a1) * R,
+      3, color, 0.9,
+    );
   }
 }
 
@@ -1157,7 +1161,7 @@ export function drawScene(
     drawSoldier(r, {
       id: p.id, name: p.name, x: p.x, y: p.y, aim: p.aim, weapon: p.weapon,
       vx: p.vx, onGround: p.onGround, jetU: p.jetU, jetD: p.jetD,
-      priming: p.priming, healing: p.healing, bandageT: p.bandageT,
+      priming: p.priming, healing: p.healing, bandageT: p.bandageT, reloadT: p.reloadT,
       dizzy: p.dizzy, prot: p.prot, accent: playerColor(p.id),
     }, dt, t, tex);
   }
@@ -1182,7 +1186,7 @@ export function drawScene(
     drawSoldier(r, {
       id: self.id, name: self.name, x: self.x, y: self.y, aim: self.aim, weapon: self.weapon,
       vx: self.vx, onGround: self.onGround, jetU: self.jetU, jetD: self.jetD,
-      priming: self.priming, healing: self.healing, bandageT: self.bandageT,
+      priming: self.priming, healing: self.healing, bandageT: self.bandageT, reloadT: self.reloadT,
       dizzy: self.dizzy, prot: self.prot, accent: playerColor(self.id),
     }, dt, t, tex);
   }

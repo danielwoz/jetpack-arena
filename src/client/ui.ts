@@ -209,6 +209,15 @@ export class Ui {
       this.adminInputs.set(key, inp);
     };
 
+    const actions = document.createElement('div');
+    actions.className = 'tune-section';
+    const endBtn = document.createElement('button');
+    endBtn.className = 'minor';
+    endBtn.textContent = 'END ROUND NOW (rotates map)';
+    endBtn.addEventListener('click', () => this.onAdmin({ action: 'endRound' }));
+    actions.appendChild(endBtn);
+    list.appendChild(actions);
+
     const game = section('GAME');
     for (const [k, v] of Object.entries(TUNE)) {
       addRow(game, `c:${k}`, k, v as number, (nv) => ({ consts: { [k]: nv } }));

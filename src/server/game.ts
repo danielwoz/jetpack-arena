@@ -6,7 +6,7 @@ import {
   FUEL_MAX, GRAVITY, INPUT_QUEUE_CAP, MAX_FALL_SPEED, MAX_HP,
   MAX_NAME_LEN, MAX_PLAYERS, MIN_PLAYERS, NADE_BOUNCE, NADE_COUNT,
   NADE_HOLE_R, NADE_SHOCK_PUSH, NADE_SHOCK_R, NADE_THROW_SPEED, NAPALM_DIRECT_TICKS, PING_INTERVAL_TICKS,
-  PLAYER_HH, PLAYER_HW, ROUND_TICKS, SNAPSHOT_EVERY, SPAWN_PROTECT_TICKS,
+  PLAYER_H, PLAYER_HH, PLAYER_HW, ROUND_TICKS, SNAPSHOT_EVERY, SPAWN_PROTECT_TICKS,
   TICK_MS, TICK_RATE, WORLD_H, WORLD_W,
 } from '../shared/constants.ts';
 import { CURRENT_MAP, MAP_NAMES, SOLIDS, SPAWN_POINTS, setMap } from '../shared/map.ts';
@@ -227,6 +227,12 @@ export class GameRoom {
           break;
         case 'admin': {
           // live tuning: open to every player for now, by design
+          const act = (msg.data as { action?: string } | null)?.action;
+          if (act === 'endRound') {
+            this.roundEnd = Math.min(this.roundEnd, this.tick + 1);
+            console.log(`[admin] ${player.name} ended the round`);
+            break;
+          }
           applyTune(msg.data);
           const state = JSON.stringify({ t: 'tune', data: tuneSnapshot() });
           for (const q of this.players.values()) q.conn?.send(state);
@@ -281,7 +287,7 @@ export class GameRoom {
   private spawn(p: ServerPlayer, loadout: Loadout, nadeType?: NadeType): void {
     const sp = this.pickSpawn();
     Object.assign(p.state, blankState(loadout, nadeType ?? p.respawnNade), {
-      x: sp.x, y: sp.y, alive: true, onGround: true,
+      x: sp.x, y: sp.y - PLAYER_H, alive: true, onGround: false,
     } satisfies Partial<PlayerState>);
     p.protUntil = this.tick + SPAWN_PROTECT_TICKS;
     p.wantsRespawn = false;
