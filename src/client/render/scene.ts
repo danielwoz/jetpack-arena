@@ -332,16 +332,25 @@ function drawPandoraHills(r: Renderer, left: number, right: number): void {
   r.setTexture(null);
 }
 
+// one backdrop image cover-fits the screen: a screen-shaped window is
+// sampled from inside the texture and pans within the leftover margin,
+// so the image never wraps or smears at its edges
+function drawCoverSky(r: Renderer, cam: Camera, tex: Texture, imgAspect: number, dim: number): void {
+  r.beginScreen();
+  r.setTexture(tex);
+  const sa = r.width / Math.max(1, r.height);
+  const fw = Math.min(1, sa / imgAspect);   // texture window, cover-fit
+  const fh = Math.min(1, imgAspect / sa);
+  const px = (1 - fw) * Math.max(0, Math.min(1, cam.x / WORLD_W));
+  const py = (1 - fh) * Math.max(0, Math.min(1, cam.y / WORLD_H));
+  const tint: RGB = [dim, dim, dim];
+  r.texQuadUV(0, 0, r.width, r.height, px, py, px + fw, py + fh, tint, tint);
+  r.setTexture(null);
+}
+
 function drawPandoraSky(r: Renderer, cam: Camera): void {
   const alt = 1 - cam.y / WORLD_H;
-  r.beginScreen();
-  r.setTexture(PD_SKY);
-  const uOff = cam.x * 0.00003;
-  const vOff = alt * 0.16;
-  const dim = 1 - alt * 0.2;
-  const tint: RGB = [dim, dim, dim];
-  r.texQuadUV(0, 0, r.width, r.height, uOff, vOff * 0.3, uOff + 1, 1 - vOff * 0.1, tint, tint);
-  r.setTexture(null);
+  drawCoverSky(r, cam, PD_SKY!, 2, 1 - alt * 0.2);
 }
 
 function drawJungleLayer(r: Renderer, cam: Camera, layer: Flora[], f: number, dim: number): void {
@@ -362,15 +371,7 @@ function drawJungleLayer(r: Renderer, cam: Camera, layer: Flora[], f: number, di
 
 function drawSky(r: Renderer, cam: Camera, tex: SceneTex): void {
   const alt = 1 - cam.y / WORLD_H;        // 0 near ground, 1 at the ceiling
-  r.beginScreen();
-  // painted nebula backdrop, slow horizontal parallax, darker at altitude
-  r.setTexture(tex.nebula);
-  const uOff = cam.x * 0.00003;
-  const vOff = alt * 0.22;                // climb reveals deeper space
-  const dim = 1 - alt * 0.35;
-  const tint: RGB = [dim, dim, Math.min(1, dim * 1.08)];
-  r.texQuadUV(0, 0, r.width, r.height, uOff, vOff * 0.3, uOff + 1, 1 - vOff * 0.15, tint, tint);
-  r.setTexture(null);
+  drawCoverSky(r, cam, tex.nebula, 2, 1 - alt * 0.35);
 }
 
 function drawNebulaAndPlanet(r: Renderer, cam: Camera, t: number, tex: SceneTex): void {
