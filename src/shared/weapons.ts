@@ -181,7 +181,7 @@ export function validLoadout(l: unknown): l is [WeaponId, WeaponId, WeaponId] {
 
 // grenade types: fuse runs from the moment priming starts
 export const NADES: Record<import('./types.ts').NadeType, { name: string; fuse: number; throwMult: number; desc: string }> = {
-  frag: { name: 'FRAG', fuse: 180, throwMult: 1, desc: '95 dmg center → 30 at the edge; carves craters' },
+  frag: { name: 'FRAG', fuse: 180, throwMult: 2.01, desc: '95 dmg center → 30 at the edge; carves craters' },
   flash: { name: 'FLASHBANG', fuse: 60, throwMult: 2, desc: 'whites out nearby screens up to 4 s; flies far' },
   napalm: { name: 'NAPALM', fuse: 60, throwMult: 1, desc: 'splashes fire that burns 20 hp/s' },
 };
