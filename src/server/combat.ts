@@ -2,7 +2,7 @@ import {
   ARMOR_PER_KILL, DT, GRAVITY, HEADSHOT_MULT, HEAD_ZONE, LAGCOMP_MAX_TICKS,
   LEG_MULT, LEG_ZONE, MAX_ARMOR, MAX_MAGS, MAX_NADES, MAX_RANGE,
   NADE_RADIUS, PLAYER_H, PLAYER_HH, PLAYER_HW, PLAYER_W,
-  RESPAWN_TICKS,
+  RESPAWN_TICKS, VIEW_H,
 } from '../shared/constants.ts';
 import { applyDamage } from '../shared/step.ts';
 import { TUNE } from '../shared/tuning.ts';
@@ -243,7 +243,9 @@ const CHANNEL: Partial<Record<PlayerState['weapon'], { r: number; len: number }>
   m249: { r: 8, len: 34 },
   dmr: { r: 3.5, len: 68 }, sniper: { r: 3.5, len: 102 },
 };
-const PIERCE_HOLE_R = 8;
+// rounds only chip terrain up close — past 75% of a screen width the hit
+// still lands (and still stops the bullet), it just leaves no channel
+const ENV_DMG_RANGE = VIEW_H * (16 / 9) * 0.75;
 
 export function stepBullets(world: CombatWorld, bullets: Bullet[]): void {
   for (let i = bullets.length - 1; i >= 0; i--) {
@@ -321,7 +323,7 @@ export function stepBullets(world: CombatWorld, bullets: Bullet[]): void {
       const ch = CHANNEL[b.weapon];
       const soft = SOLIDS.some((r2) =>
         !r2.ind && px >= r2.x && px <= r2.x + r2.w && py >= r2.y && py <= r2.y + r2.h);
-      if (pierce && ch && soft && !b.spent) {
+      if (pierce && ch && soft && !b.spent && b.dist + wallT <= ENV_DMG_RANGE) {
         world.world.addChannel(px, py, dirX, dirY, ch.r, ch.len);
         world.events.push({
           e: 'drill', x: rnd(px), y: rnd(py),
