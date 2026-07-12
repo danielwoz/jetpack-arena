@@ -44,9 +44,9 @@ export function collideMove(
   const moveX = p.vx * dt;
   const moveY = p.vy * dt;
 
-  // broadphase: rects near the swept region
-  const minX = Math.min(p.x, p.x + moveX) - PLAYER_HW - 4;
-  const maxX = Math.max(p.x, p.x + moveX) + PLAYER_HW + 4;
+  // broadphase: rects near the swept region (square collision body)
+  const minX = Math.min(p.x, p.x + moveX) - COLLIDE_HW - 4;
+  const maxX = Math.max(p.x, p.x + moveX) + COLLIDE_HW + 4;
   const minY = Math.min(p.y, p.y + moveY) - PLAYER_HH - 4;
   const maxY = Math.max(p.y, p.y + moveY) + PLAYER_HH + 4;
   const near: Rect[] = [];
