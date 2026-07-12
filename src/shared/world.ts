@@ -49,6 +49,21 @@ export class World {
     for (const h of this.holes) this.index(h);
   }
 
+  private unindex(h: Hole): void {
+    const x0 = Math.floor((h.x - h.r) / CELL);
+    const x1 = Math.floor((h.x + h.r) / CELL);
+    const y0 = Math.floor((h.y - h.r) / CELL);
+    const y1 = Math.floor((h.y + h.r) / CELL);
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const arr = this.grid.get(World.key(cx, cy));
+        if (!arr) continue;
+        const i = arr.indexOf(h);
+        if (i >= 0) arr.splice(i, 1);
+      }
+    }
+  }
+
   addHole(x: number, y: number, r: number): void {
     const h = { x, y, r };
     this.holes.push(h);
@@ -59,7 +74,57 @@ export class World {
     }
     this.index(h);
     this.compactAround(h);
+    this.enforceBudget();
   }
+
+  // hard cap on hole count: whenever an addition exceeds it, merge the two
+  // "closest" holes — the pair whose enclosing circle is smallest, so a big
+  // crater never snowballs by eating tiny neighbors. The merged circle fully
+  // covers both originals: damage is permanent, count stays fixed.
+  private enforceBudget(): void {
+    const CAP = 400;
+    while (this.holes.length > CAP) {
+      const hs = this.holes;
+      const n = hs.length;
+      let best = Infinity;
+      let bi = -1;
+      let bj = -1;
+      for (let i = 0; i < n; i++) {
+        const a = hs[i];
+        if (a.r >= best) continue;
+        for (let j = i + 1; j < n; j++) {
+          const b = hs[j];
+          if (b.r >= best) continue;
+          const lim = 2 * best - a.r - b.r;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 >= lim * lim) continue;
+          const R = Math.max((Math.sqrt(d2) + a.r + b.r) / 2, a.r, b.r);
+          if (R < best) {
+            best = R;
+            bi = i;
+            bj = j;
+          }
+        }
+      }
+      const a = hs[bi];
+      const b = hs[bj];
+      const d = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
+      const R = best + 0.5;
+      const t = d > 0 ? Math.max(0, Math.min(1, (R - a.r - 0.5) / d)) : 0;
+      hs.splice(bj, 1);
+      hs.splice(bi, 1);
+      this.unindex(a);
+      this.unindex(b);
+      const m = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, r: R };
+      hs.push(m);
+      this.index(m);
+    }
+  }
+
+
+
 
   // damage stays permanent, but redundant holes don't: circles contained in
   // a neighbor are dropped, and heavy overlaps merge into one slightly
