@@ -58,7 +58,7 @@ export const NADE_THROW_SPEED = 640;
 export const NADE_RADIUS = 396;             // damage radius (area doubled)
 export const NADE_SHOCK_R = NADE_RADIUS * 2; // shockwave shoves airborne players
 export const NADE_SHOCK_PUSH = 4400;         // max shove, units/s at the center
-export const NADE_HOLE_R = 85;              // crater carved in destructible terrain
+export const NADE_HOLE_R = 42.5;            // crater carved in destructible terrain
 export const NADE_BOUNCE = 0.45;
 export const MAX_HOLES = 1_000_000;
 
