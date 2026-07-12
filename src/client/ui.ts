@@ -1,10 +1,5 @@
 import { RESPAWN_TICKS, TICK_MS } from '../shared/constants.ts';
-import {
-  NADES,
-  SLOT_OPTIONS,
-  WEAPONS,
-  DEFAULT_LOADOUT,
-} from '../shared/weapons.ts';
+import { NADES, SLOT_OPTIONS, WEAPONS, DEFAULT_LOADOUT } from '../shared/weapons.ts';
 import type { Loadout, NadeType, WeaponId } from '../shared/types.ts';
 import { ACTIONS, ACTION_LABELS, bindings } from './bindings.ts';
 import { audio } from './audio.ts';
@@ -15,11 +10,7 @@ function el<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
 }
 
-const SLOT_TITLES = [
-  'SLOT 1 — PRIMARY',
-  'SLOT 2 — SECONDARY',
-  'SLOT 3 — SIDEARM',
-];
+const SLOT_TITLES = ['SLOT 1 — PRIMARY', 'SLOT 2 — SECONDARY', 'SLOT 3 — SIDEARM'];
 
 function weaponTooltip(name: string, desc: string): string {
   return `${name} — ${desc}`;
@@ -41,14 +32,8 @@ function weaponStats(w: {
 
 function loadStoredLoadout(): Loadout {
   try {
-    const raw = JSON.parse(
-      localStorage.getItem('loadout') ?? 'null',
-    ) as Loadout | null;
-    if (
-      Array.isArray(raw) &&
-      raw.length === 3 &&
-      raw.every((w, i) => SLOT_OPTIONS[i].includes(w))
-    ) {
+    const raw = JSON.parse(localStorage.getItem('loadout') ?? 'null') as Loadout | null;
+    if (Array.isArray(raw) && raw.length === 3 && raw.every((w, i) => SLOT_OPTIONS[i].includes(w))) {
       return raw;
     }
   } catch {
@@ -62,12 +47,10 @@ function loadStoredNade(): NadeType {
   return raw === 'flash' || raw === 'napalm' ? raw : 'frag';
 }
 
+type PickerCursor = { row: number; col: number };
+
 // Builds the three slot groups + grenade choice; mutates the live selections.
-function buildLoadoutPicker(
-  container: HTMLElement,
-  loadout: Loadout,
-  sel: { nade: NadeType },
-): Loadout {
+function buildLoadoutPicker(container: HTMLElement, loadout: Loadout, sel: { nade: NadeType }): Loadout {
   container.innerHTML = '';
   const layout = document.createElement('div');
   layout.className = 'loadout-layout';
@@ -78,26 +61,26 @@ function buildLoadoutPicker(
       title: SLOT_TITLES[0],
       kind: 'weapon' as const,
       selected: loadout[0],
-      ids: SLOT_OPTIONS[0],
+      ids: SLOT_OPTIONS[0]
     },
     {
       title: SLOT_TITLES[1],
       kind: 'weapon' as const,
       selected: loadout[1],
-      ids: SLOT_OPTIONS[1],
+      ids: SLOT_OPTIONS[1]
     },
     {
       title: SLOT_TITLES[2],
       kind: 'weapon' as const,
       selected: loadout[2],
-      ids: SLOT_OPTIONS[2],
+      ids: SLOT_OPTIONS[2]
     },
     {
       title: 'GRENADE',
       kind: 'nade' as const,
       selected: sel.nade,
-      ids: ['frag', 'flash', 'napalm'] as NadeType[],
-    },
+      ids: ['frag', 'flash', 'napalm'] as NadeType[]
+    }
   ];
 
   for (let slot = 0; slot < sections.length; slot++) {
@@ -118,16 +101,10 @@ function buildLoadoutPicker(
       for (const id of section.ids) {
         const w = WEAPONS[id];
         const card = document.createElement('div');
-        card.className =
-          'weapon-card' + (loadout[slot] === id ? ' selected' : '');
+        card.className = 'weapon-card' + (loadout[slot] === id ? ' selected' : '');
         card.title = weaponTooltip(w.name, w.role);
-        card.setAttribute(
-          'aria-label',
-          `${w.name}. ${w.role}. ${weaponStats(w)}`,
-        );
-        card.innerHTML =
-          `<div class="wname">${w.name}</div>` +
-          `<div class="wmeta">${weaponStats(w)}</div>`;
+        card.setAttribute('aria-label', `${w.name}. ${w.role}. ${weaponStats(w)}`);
+        card.innerHTML = `<div class="wname">${w.name}</div>` + `<div class="wmeta">${weaponStats(w)}</div>`;
         card.addEventListener('click', () => {
           for (const c of cards.values()) c.classList.remove('selected');
           card.classList.add('selected');
@@ -144,13 +121,8 @@ function buildLoadoutPicker(
         const card = document.createElement('div');
         card.className = 'weapon-card' + (sel.nade === kind ? ' selected' : '');
         card.title = weaponTooltip(n.name, n.desc);
-        card.setAttribute(
-          'aria-label',
-          `${n.name}. ${n.desc}. Fuse ${(n.fuse / 60).toFixed(0)} seconds.`,
-        );
-        card.innerHTML =
-          `<div class="wname">${n.name}</div>` +
-          `<div class="wmeta">FUSE ${(n.fuse / 60).toFixed(0)}s · COUNT 3</div>`;
+        card.setAttribute('aria-label', `${n.name}. ${n.desc}. Fuse ${(n.fuse / 60).toFixed(0)} seconds.`);
+        card.innerHTML = `<div class="wname">${n.name}</div>` + `<div class="wmeta">FUSE ${(n.fuse / 60).toFixed(0)}s · COUNT 3</div>`;
         card.addEventListener('click', () => {
           for (const c of cards.values()) c.classList.remove('selected');
           card.classList.add('selected');
@@ -192,13 +164,7 @@ export class Ui {
       list.appendChild(sec);
       return grid;
     };
-    const addRow = (
-      grid: HTMLDivElement,
-      key: string,
-      label: string,
-      value: number,
-      send: (v: number) => unknown,
-    ): void => {
+    const addRow = (grid: HTMLDivElement, key: string, label: string, value: number, send: (v: number) => unknown): void => {
       const row = document.createElement('div');
       row.className = 'tune-row';
       const lab = document.createElement('label');
@@ -222,9 +188,7 @@ export class Ui {
     const endBtn = document.createElement('button');
     endBtn.className = 'minor';
     endBtn.textContent = 'END ROUND NOW (rotates map)';
-    endBtn.addEventListener('click', () =>
-      this.onAdmin({ action: 'endRound' }),
-    );
+    endBtn.addEventListener('click', () => this.onAdmin({ action: 'endRound' }));
     actions.appendChild(endBtn);
     list.appendChild(actions);
 
@@ -237,7 +201,7 @@ export class Ui {
       const grid = section(w.name);
       for (const f of WEAPON_TUNABLE) {
         addRow(grid, `w:${id}:${f}`, f, w[f] as number, (nv) => ({
-          weapons: { [id]: { [f]: nv } },
+          weapons: { [id]: { [f]: nv } }
         }));
       }
     }
@@ -252,12 +216,7 @@ export class Ui {
       const v =
         parts[0] === 'c'
           ? (TUNE as unknown as Record<string, number>)[parts[1]]
-          : (
-              WEAPONS[parts[1] as keyof typeof WEAPONS] as unknown as Record<
-                string,
-                number
-              >
-            )[parts[2]];
+          : (WEAPONS[parts[1] as keyof typeof WEAPONS] as unknown as Record<string, number>)[parts[2]];
       if (v !== undefined) inp.value = String(v);
     }
   }
@@ -268,27 +227,26 @@ export class Ui {
   private disconnected = el<HTMLDivElement>('disconnected');
   private nameInput = el<HTMLInputElement>('name');
   private joinBtn = el<HTMLButtonElement>('joinbtn');
-  private joinTabs = Array.from(
-    this.join.querySelectorAll<HTMLButtonElement>('.join-tab'),
-  );
-  private joinPanels: Record<
-    'loadout' | 'controls' | 'settings',
-    HTMLDivElement
-  > = {
+  private joinTabs = Array.from(this.join.querySelectorAll<HTMLButtonElement>('.join-tab'));
+  private joinPanels: Record<'loadout' | 'controls' | 'settings', HTMLDivElement> = {
     loadout: el<HTMLDivElement>('join-tab-loadout'),
     controls: el<HTMLDivElement>('join-tab-controls'),
-    settings: el<HTMLDivElement>('join-tab-settings'),
+    settings: el<HTMLDivElement>('join-tab-settings')
   };
   private respawnBtn = el<HTMLButtonElement>('respawnbtn');
   private joinStatus = el<HTMLDivElement>('join-status');
+  private joinWeapons = el<HTMLDivElement>('join-weapons');
+  private deathWeapons = el<HTMLDivElement>('death-weapons');
 
   private loadout: Loadout = loadStoredLoadout();
   private nadeSel = { nade: loadStoredNade() };
+  private joinCursor: PickerCursor = { row: 0, col: 0 };
+  private deathCursor: PickerCursor = { row: 0, col: 0 };
+  private capturingBindKey = false;
   private respawnReadyAt = 0;
   private countdownTimer = 0;
 
-  onJoin: (name: string, loadout: Loadout, nadeType: NadeType) => void =
-    () => {};
+  onJoin: (name: string, loadout: Loadout, nadeType: NadeType) => void = () => {};
   onRespawn: (loadout: Loadout, nadeType: NadeType) => void = () => {};
   onCaptureChange: (capturing: boolean) => void = () => {};
 
@@ -306,11 +264,13 @@ export class Ui {
       btn.addEventListener('click', () => {
         btn.textContent = 'PRESS A KEY…';
         btn.classList.add('listening');
+        this.capturingBindKey = true;
         this.onCaptureChange(true);
         const capture = (e: KeyboardEvent): void => {
           e.preventDefault();
           e.stopPropagation();
           window.removeEventListener('keydown', capture, true);
+          this.capturingBindKey = false;
           this.onCaptureChange(false);
           if (e.code !== 'Escape') bindings.set(action, e.code);
           this.refreshBindLists();
@@ -334,19 +294,90 @@ export class Ui {
       btn.classList.toggle('active', active);
       btn.setAttribute('aria-selected', String(active));
     }
-    (
-      Object.keys(this.joinPanels) as Array<'loadout' | 'controls' | 'settings'>
-    ).forEach((key) => {
+    (Object.keys(this.joinPanels) as Array<'loadout' | 'controls' | 'settings'>).forEach((key) => {
       this.joinPanels[key].classList.toggle('hidden', key !== tab);
     });
+    if (tab === 'loadout') {
+      this.focusPickerSelected(this.joinWeapons, this.joinCursor);
+    } else {
+      this.clearPickerHover(this.joinWeapons);
+    }
+  }
+
+  private getPickerRows(container: HTMLElement): HTMLElement[][] {
+    return Array.from(container.querySelectorAll<HTMLElement>('.loadout-column')).map((col) =>
+      Array.from(col.querySelectorAll<HTMLElement>('.weapon-card'))
+    );
+  }
+
+  private clearPickerHover(container: HTMLElement): void {
+    for (const card of container.querySelectorAll<HTMLElement>('.weapon-card.kbd-hover')) {
+      card.classList.remove('kbd-hover');
+    }
+  }
+
+  private setPickerHover(container: HTMLElement, cursor: PickerCursor, row: number, col: number): boolean {
+    const rows = this.getPickerRows(container);
+    if (rows.length === 0) return false;
+    const nextRow = Math.max(0, Math.min(row, rows.length - 1));
+    const nextCol = Math.max(0, Math.min(col, rows[nextRow].length - 1));
+    const card = rows[nextRow][nextCol];
+    if (!card) return false;
+    this.clearPickerHover(container);
+    card.classList.add('kbd-hover');
+    cursor.row = nextRow;
+    cursor.col = nextCol;
+    return true;
+  }
+
+  private focusPickerSelected(container: HTMLElement, cursor: PickerCursor): void {
+    const rows = this.getPickerRows(container);
+    for (let row = 0; row < rows.length; row++) {
+      for (let col = 0; col < rows[row].length; col++) {
+        if (rows[row][col].classList.contains('selected')) {
+          this.setPickerHover(container, cursor, row, col);
+          return;
+        }
+      }
+    }
+    this.setPickerHover(container, cursor, 0, 0);
+  }
+
+  private movePicker(container: HTMLElement, cursor: PickerCursor, dx: number, dy: number): void {
+    if (!this.setPickerHover(container, cursor, cursor.row, cursor.col)) {
+      return;
+    }
+    this.setPickerHover(container, cursor, cursor.row + dy, cursor.col + dx);
+  }
+
+  private activatePicker(container: HTMLElement, cursor: PickerCursor): void {
+    if (this.setPickerHover(container, cursor, cursor.row, cursor.col)) {
+      const rows = this.getPickerRows(container);
+      rows[cursor.row]?.[cursor.col]?.click();
+    }
+  }
+
+  private activePickerContext(): { container: HTMLElement; cursor: PickerCursor } | null {
+    if (this.capturingBindKey) return null;
+    if (!this.death.classList.contains('hidden')) {
+      return { container: this.deathWeapons, cursor: this.deathCursor };
+    }
+    if (!this.join.classList.contains('hidden') && this.joinTab === 'loadout') {
+      return { container: this.joinWeapons, cursor: this.joinCursor };
+    }
+    return null;
+  }
+
+  private activeDeployButton(): HTMLButtonElement | null {
+    if (!this.death.classList.contains('hidden')) return this.respawnBtn;
+    if (!this.join.classList.contains('hidden') && this.joinTab === 'loadout') {
+      return this.joinBtn;
+    }
+    return null;
   }
 
   private normalizeJoinTabHeights(): void {
-    const keys: Array<'loadout' | 'controls' | 'settings'> = [
-      'loadout',
-      'controls',
-      'settings',
-    ];
+    const keys: Array<'loadout' | 'controls' | 'settings'> = ['loadout', 'controls', 'settings'];
     const current = this.joinTab;
     let maxHeight = 0;
     for (const key of keys) {
@@ -378,18 +409,9 @@ export class Ui {
 
     // settings: volume sliders persist; ESC toggles the panel in-game
     const settings = el<HTMLDivElement>('settings');
-    const volMusic = [
-      el<HTMLInputElement>('vol-music'),
-      el<HTMLInputElement>('join-vol-music'),
-    ];
-    const volSfx = [
-      el<HTMLInputElement>('vol-sfx'),
-      el<HTMLInputElement>('join-vol-sfx'),
-    ];
-    const resScale = [
-      el<HTMLInputElement>('res-scale'),
-      el<HTMLInputElement>('join-res-scale'),
-    ];
+    const volMusic = [el<HTMLInputElement>('vol-music'), el<HTMLInputElement>('join-vol-music')];
+    const volSfx = [el<HTMLInputElement>('vol-sfx'), el<HTMLInputElement>('join-vol-sfx')];
+    const resScale = [el<HTMLInputElement>('res-scale'), el<HTMLInputElement>('join-res-scale')];
     const syncSlider = (group: HTMLInputElement[], value: number): void => {
       const text = String(Math.round(value));
       for (const input of group) {
@@ -419,15 +441,9 @@ export class Ui {
       syncSlider(resScale, value);
     };
 
-    volMusic.forEach((input) =>
-      input.addEventListener('input', () => onMusic(input)),
-    );
-    volSfx.forEach((input) =>
-      input.addEventListener('input', () => onSfx(input)),
-    );
-    resScale.forEach((input) =>
-      input.addEventListener('input', () => onRes(input)),
-    );
+    volMusic.forEach((input) => input.addEventListener('input', () => onMusic(input)));
+    volSfx.forEach((input) => input.addEventListener('input', () => onSfx(input)));
+    resScale.forEach((input) => input.addEventListener('input', () => onRes(input)));
 
     el<HTMLButtonElement>('setclose').addEventListener('click', () => {
       settings.classList.add('hidden');
@@ -458,6 +474,63 @@ export class Ui {
       if (!this.inGame) return;
       settings.classList.toggle('hidden');
     });
+    document.addEventListener('keydown', (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      if (!controls.classList.contains('hidden')) return;
+      if (!admin.classList.contains('hidden')) return;
+
+      if (e.code === 'Tab') {
+        const deployBtn = this.activeDeployButton();
+        const picker = this.activePickerContext();
+        if (!deployBtn || !picker) return;
+        e.preventDefault();
+        if (document.activeElement === deployBtn) {
+          deployBtn.blur();
+          this.focusPickerSelected(picker.container, picker.cursor);
+        } else {
+          deployBtn.focus();
+        }
+        return;
+      }
+
+      if (target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement) {
+        return;
+      }
+
+      const picker = this.activePickerContext();
+      if (!picker) return;
+      switch (e.code) {
+        case 'KeyW':
+          this.movePicker(picker.container, picker.cursor, -1, 0);
+          break;
+        case 'KeyA':
+          this.movePicker(picker.container, picker.cursor, 0, -1);
+          break;
+        case 'KeyS':
+          this.movePicker(picker.container, picker.cursor, 1, 0);
+          break;
+        case 'KeyD':
+          this.movePicker(picker.container, picker.cursor, 0, 1);
+          break;
+        case 'Enter':
+        case 'NumpadEnter':
+          this.activatePicker(picker.container, picker.cursor);
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    });
     el<HTMLButtonElement>('bindclose').addEventListener('click', () => {
       controls.classList.add('hidden');
     });
@@ -471,7 +544,8 @@ export class Ui {
     });
     this.refreshBindLists();
 
-    buildLoadoutPicker(el('join-weapons'), this.loadout, this.nadeSel);
+    buildLoadoutPicker(this.joinWeapons, this.loadout, this.nadeSel);
+    this.focusPickerSelected(this.joinWeapons, this.joinCursor);
     this.normalizeJoinTabHeights();
     window.addEventListener('resize', () => this.normalizeJoinTabHeights());
     this.join.classList.add('ready');
@@ -510,13 +584,11 @@ export class Ui {
   }
 
   showDeath(killerName: string | null, instant = false): void {
-    buildLoadoutPicker(el('death-weapons'), this.loadout, this.nadeSel);
-    this.deathMsg.textContent = killerName
-      ? `ELIMINATED BY ${killerName.toUpperCase()}`
-      : 'YOU DIED';
+    buildLoadoutPicker(this.deathWeapons, this.loadout, this.nadeSel);
+    this.focusPickerSelected(this.deathWeapons, this.deathCursor);
+    this.deathMsg.textContent = killerName ? `ELIMINATED BY ${killerName.toUpperCase()}` : 'YOU DIED';
     this.death.classList.remove('hidden');
-    this.respawnReadyAt =
-      performance.now() + (instant ? 0 : RESPAWN_TICKS * TICK_MS);
+    this.respawnReadyAt = performance.now() + (instant ? 0 : RESPAWN_TICKS * TICK_MS);
     this.respawnBtn.disabled = true;
 
     clearInterval(this.countdownTimer);
@@ -536,6 +608,7 @@ export class Ui {
 
   hideDeath(): void {
     this.death.classList.add('hidden');
+    this.clearPickerHover(this.deathWeapons);
   }
 
   showDisconnected(): void {

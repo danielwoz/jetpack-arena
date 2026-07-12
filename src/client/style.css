@@ -227,6 +227,11 @@ body.playing {
   border-color: #4a6ab8;
   transform: translateY(-1px);
 }
+.weapon-card.kbd-hover {
+  border-color: #4a6ab8;
+  transform: translateY(-1px);
+  background: #101a35;
+}
 .weapon-card.selected {
   border-color: #6f9bff;
   background: #131c3a;
@@ -726,18 +731,10 @@ button.minor {
   transition: opacity 0.5s;
 }
 #lowfuel {
-  background: radial-gradient(
-    ellipse at center,
-    transparent 62%,
-    rgba(255, 200, 30, 0.5) 100%
-  );
+  background: radial-gradient(ellipse at center, transparent 62%, rgba(255, 200, 30, 0.5) 100%);
 }
 #lowhp {
-  background: radial-gradient(
-    ellipse at center,
-    transparent 60%,
-    rgba(255, 30, 20, 0.55) 100%
-  );
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(255, 30, 20, 0.55) 100%);
 }
 #lowfuel.on,
 #lowhp.on {
@@ -761,11 +758,7 @@ button.minor {
   inset: 0;
   pointer-events: none;
   z-index: 15;
-  background: radial-gradient(
-    ellipse at center,
-    transparent 55%,
-    rgba(255, 30, 20, 0.45) 100%
-  );
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(255, 30, 20, 0.45) 100%);
   opacity: 0;
   transition: opacity 0.4s;
 }
