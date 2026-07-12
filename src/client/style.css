@@ -56,6 +56,7 @@ body.playing {
   z-index: 20;
   overflow-y: auto; /* small windows scroll the panel */
   padding: 9px 5px;
+  cursor: default;
 }
 .panel {
   margin: auto; /* centers when it fits, scrolls when not */
