@@ -1123,7 +1123,8 @@ export function drawScene(
     const meta = PD_META;
     r.setTexture(PD_FLORA);
     for (const s2 of SOLIDS) {
-      if (s2.k === 'wall' || s2.w < 120) continue;
+      // meadow bushes grow on the floor only — never on floating rock
+      if (s2.k !== 'ground' || s2.ind || s2.w < 100) continue;
       if (s2.x + s2.w < left || s2.x > right || s2.y < topB - 200 || s2.y > bottom + 200) continue;
       const dec = rng((s2.x * 29 + s2.y * 3) | 0);
       const n = Math.min(5, Math.max(1, Math.floor(s2.w / 260)));
@@ -1132,6 +1133,8 @@ export function drawScene(
         const bh = 26 + dec() * 44;
         const bw = bh * c.aspect;
         const bx = s2.x + 20 + dec() * (s2.w - 40 - bw);
+        // a bush dies with the ground under it
+        if (!world.solidAt(bx + bw / 2, s2.y + 8)) continue;
         r.texQuadUV(bx, s2.y - bh + 2, bw, bh, c.u0, c.v0, c.u1, c.v1, [1, 1, 1], [0.8, 0.85, 0.8]);
       }
     }
