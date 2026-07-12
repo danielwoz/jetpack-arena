@@ -39,6 +39,10 @@ ui.onCaptureChange = (capturing) => { input.capturing = capturing; };
 setTimeout(() => ensureTextures(renderer), 30);
 
 // /?cells — every sprite cell as a data URL, for the AI re-texture pipeline
+const GL_STATS = new URLSearchParams(location.search).has('glstats');
+let glFrames = 0;
+let glFlushes = 0;
+
 if (new URLSearchParams(location.search).has('cells')) {
   import('./render/soldier.ts').then((S) => {
     const out: Record<string, string> = {};
@@ -350,12 +354,25 @@ function frame(now: number): void {
   net!.advance(elapsed);
 
   acc += elapsed;
+  // a slow machine must not sim-step its way into an even slower frame:
+  // drop excess time instead of spiraling; reconciliation absorbs the skip
+  if (acc > TICK_MS * 5) acc = TICK_MS * 5;
   while (acc >= TICK_MS) {
     acc -= TICK_MS;
     fixedStep();
   }
 
   render(elapsed / 1000, acc / TICK_MS);
+  if (GL_STATS) {
+    glFrames++;
+    glFlushes += renderer.flushes;
+    if (glFrames >= 120) {
+      console.log(`[glstats] ${(glFlushes / glFrames).toFixed(1)} draw calls/frame`);
+      glFrames = 0;
+      glFlushes = 0;
+    }
+  }
+  renderer.flushes = 0;
 }
 
 function render(dtSec: number, alpha: number): void {

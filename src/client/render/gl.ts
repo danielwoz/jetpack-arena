@@ -28,6 +28,20 @@ void main() { outColor = texture(u_tex, v_uv) * v_col; }`;
 export type RGB = [number, number, number];
 export type Texture = WebGLTexture;
 
+// render resolution scale — lower-spec machines can trade sharpness for
+// fill rate from the settings menu; the canvas CSS size never changes
+let renderScale = Math.min(1, Math.max(0.5,
+  parseFloat(localStorage.getItem('render-scale') ?? '1') || 1));
+
+export function setRenderScale(v: number): void {
+  renderScale = Math.min(1, Math.max(0.5, v));
+  localStorage.setItem('render-scale', String(renderScale));
+}
+
+export function getRenderScale(): number {
+  return renderScale;
+}
+
 const FLOATS_PER_VERT = 8;
 const CAPACITY = 10000 * FLOATS_PER_VERT * 3;
 
@@ -192,15 +206,19 @@ export class Renderer {
     this.gl.disable(this.gl.SCISSOR_TEST);
   }
 
+  private additive = false;
+
   setAdditive(on: boolean): void {
+    if (on === this.additive) return;
     this.flush();
+    this.additive = on;
     const gl = this.gl;
     if (on) gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     else gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   }
 
   resize(): void {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * renderScale;
     const w = Math.floor(this.canvas.clientWidth * dpr);
     const h = Math.floor(this.canvas.clientHeight * dpr);
     if (w !== this.width || h !== this.height) {
@@ -412,11 +430,14 @@ export class Renderer {
     }
   }
 
+  flushes = 0;   // draw calls this frame; reset by the frame loop
+
   flush(): void {
     if (this.n === 0) return;
     const gl = this.gl;
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.data.subarray(0, this.n));
     gl.drawArrays(gl.TRIANGLES, 0, this.n / FLOATS_PER_VERT);
     this.n = 0;
+    this.flushes++;
   }
 }

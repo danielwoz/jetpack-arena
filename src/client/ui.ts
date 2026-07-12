@@ -8,6 +8,7 @@ import {
 import type { Loadout, NadeType, WeaponId } from '../shared/types.ts';
 import { ACTIONS, ACTION_LABELS, bindings } from './bindings.ts';
 import { audio } from './audio.ts';
+import { getRenderScale, setRenderScale } from './render/gl.ts';
 import { TUNE, WEAPON_TUNABLE } from '../shared/tuning.ts';
 
 function el<T extends HTMLElement>(id: string): T {
@@ -315,6 +316,11 @@ export class Ui {
     volSfx.addEventListener('input', () => {
       audio.resume();
       audio.setSfxVol(Number(volSfx.value) / 100);
+    });
+    const resScale = el<HTMLInputElement>('res-scale');
+    resScale.value = String(Math.round(getRenderScale() * 100));
+    resScale.addEventListener('input', () => {
+      setRenderScale(Number(resScale.value) / 100);
     });
     el<HTMLButtonElement>('settingsbtn').addEventListener('click', () => {
       audio.resume();

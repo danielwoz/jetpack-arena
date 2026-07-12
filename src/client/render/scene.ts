@@ -457,14 +457,13 @@ function drawCity(
       const cv = Math.floor(ci / FACADE_COLS) / FACADE_ROWS;
       const tint = mix(lit, [1, 1, 1], 0.3 + b.tone * 0.3);
       const tintB = mix(tint, [0, 0, 0], 0.6);
-      r.setTexture(FACADES);
+      r.setTexture(FACADES);   // lazy — consecutive facades share one batch
       r.texQuadUV(b.x, fTop, b.w, bh,
         cu, cv, cu + 1 / FACADE_COLS, cv + 1 / FACADE_ROWS,
         tint, tintB);
       r.texQuadUV(b.x, b.base, b.w, 900,
         cu, cv + 0.995 / FACADE_ROWS, cu + 1 / FACADE_COLS, cv + 1 / FACADE_ROWS,
         tintB, mix(tintB, [0, 0, 0], 0.7));
-      r.setTexture(null);
       continue;
     }
     r.gradQuad(b.x, b.top, b.w, h, body, bodyDark);
@@ -531,6 +530,7 @@ function drawCity(
       r.quad(ax - 1.8, roofY - 42, 3.6, 3.6, [1, 0.4, 0.4], 0.5 + blink * 0.5);
     }
   }
+  r.setTexture(null);
 }
 
 // ---------------------------------------------------- polygon silhouettes
@@ -642,45 +642,79 @@ const BOULDER_TOP: RGB = [0.30, 0.25, 0.38];
 const BOULDER_BODY: RGB = [0.16, 0.13, 0.22];
 const CRYSTAL: RGB = [0.80, 0.45, 1.0];
 
-function drawPandoraBoulder(r: Renderer, s: MapRect): boolean {
-  if (!pandoraReady() || !PD_META) return false;
+// the map assigned pandora boulders a sprite; the rect matches the sprite's
+// bounds and collision follows its opaque pixels — drawn exactly flush
+function spriteCell(s: MapRect): { u0: number; v0: number; u1: number; v1: number } | null {
+  if (s.k !== 'boulder' || !pandoraReady() || !PD_META) return null;
   const cells = PD_META.rocks;
-  if (!cells || cells.length === 0) return false;
-  // the map assigned this boulder its sprite; the rect matches the sprite's
-  // bounds and collision follows its opaque pixels — draw it exactly flush
-  const c = cells[(s.cell ?? 0) % cells.length];
-  r.setTexture(PD_FLORA);
-  r.texQuadUV(s.x, s.y, s.w, s.h, c.u0, c.v0, c.u1, c.v1, [1, 1, 1], [0.75, 0.8, 0.8]);
-  r.setTexture(null);
-  return true;
+  if (!cells || cells.length === 0) return null;
+  return cells[(s.cell ?? 0) % cells.length];
 }
 
-function drawSolid(r: Renderer, s: MapRect, t: number, tex: SceneTex): void {
-  if (s.k === 'wall') return;
-  if (s.k === 'boulder' && drawPandoraBoulder(r, s)) return;
-  const P = solidPoly(s);
-  r.poly(P.outline, OUTLINE);
+// Solids draw in three batched passes — outlines, texture-grouped bodies,
+// then decorations (their glows queue for the end-of-frame additive pass).
+// Interleaving these per solid cost a draw call per state switch.
+const SOLID_KINDS = ['ground', 'rock', 'plat', 'boulder'] as const;
+const VIS_SOLIDS: MapRect[] = [];
 
+function drawSolids(r: Renderer, list: readonly MapRect[], t: number, tex: SceneTex): void {
+  for (const s of list) {
+    if (!spriteCell(s)) r.poly(solidPoly(s).outline, OUTLINE);
+  }
+  const grassy = THEME === 'pandora' && PD_GRASS;
+  for (const k of SOLID_KINDS) {
+    for (const s of list) {
+      if (s.k !== k) continue;
+      const P = solidPoly(s);
+      switch (k) {
+        case 'ground':
+          r.setTexture(grassy ? PD_GRASS : tex.concrete);
+          if (grassy) {
+            r.texPoly(P.pts, 340, [0.72, 0.85, 0.66], [0.28, 0.40, 0.30], P.minY, P.maxY);
+          } else {
+            r.texPoly(P.pts, 340, [0.62, 0.68, 0.74], [0.30, 0.33, 0.42], P.minY, P.maxY);
+          }
+          break;
+        case 'rock':
+          r.setTexture(tex.rock);
+          r.texPoly(P.pts, 300, [0.58, 0.60, 0.74], [0.28, 0.30, 0.40], P.minY, P.maxY);
+          break;
+        case 'plat':
+          r.setTexture(tex.metal);
+          r.texPoly(P.pts, 128, [0.55, 0.63, 0.76], [0.24, 0.28, 0.40], P.minY, P.maxY);
+          break;
+        case 'boulder': {
+          const c = spriteCell(s);
+          if (c) {
+            r.setTexture(PD_FLORA);
+            r.texQuadUV(s.x, s.y, s.w, s.h, c.u0, c.v0, c.u1, c.v1, [1, 1, 1], [0.75, 0.8, 0.8]);
+          } else {
+            r.setTexture(tex.rock);
+            r.texPoly(P.pts, 220, [0.60, 0.50, 0.74], [0.26, 0.21, 0.36], P.minY, P.maxY);
+          }
+          break;
+        }
+      }
+    }
+  }
+  r.setTexture(null);
+  for (const s of list) {
+    if (!spriteCell(s)) drawSolidDecor(r, s, t);
+  }
+}
+
+function drawSolidDecor(r: Renderer, s: MapRect, t: number): void {
   switch (s.k) {
     case 'ground': {
       const grassy = THEME === 'pandora' && PD_GRASS;
-      r.setTexture(grassy ? PD_GRASS : tex.concrete);
-      if (grassy) {
-        r.texPoly(P.pts, 340, [0.72, 0.85, 0.66], [0.28, 0.40, 0.30], P.minY, P.maxY);
-      } else {
-        r.texPoly(P.pts, 340, [0.62, 0.68, 0.74], [0.30, 0.33, 0.42], P.minY, P.maxY);
-      }
-      r.setTexture(null);
       if (grassy) {
         // sunlit meadow lip instead of the tech strip
         r.quad(s.x, s.y, s.w, 5, [0.45, 0.85, 0.4], 0.5);
         const dec2 = rng((s.x * 13 + s.y * 7) | 0);
-        r.setAdditive(true);
         for (let i = 0; i < 4; i++) {
           const lx = s.x + 30 + dec2() * (s.w - 60);
-          r.glowDisc(lx, s.y + 6 + dec2() * 12, 6 + dec2() * 9, [0.4, 1, 0.6], 0.12 + dec2() * 0.1, 8);
+          queueGlow(lx, s.y + 6 + dec2() * 12, 6 + dec2() * 9, [0.4, 1, 0.6], 0.12 + dec2() * 0.1, 8);
         }
-        r.setAdditive(false);
         break;
       }
       r.quad(s.x, s.y, s.w, 6, mix(GROUND_TOP, ACCENT, 0.35), 0.75);
@@ -710,12 +744,10 @@ function drawSolid(r: Renderer, s: MapRect, t: number, tex: SceneTex): void {
         for (let k = 0; k < 3; k++) r.quad(vx + 2, vy + 3 + k * 4, 20, 1.6, [0.22, 0.26, 0.33]);
       }
       // patches of glowing alien lichen under the lip
-      r.setAdditive(true);
       for (let i = 0; i < 3; i++) {
         const lx = s.x + 30 + dec() * (s.w - 60);
-        r.glowDisc(lx, s.y + 8 + dec() * 10, 7 + dec() * 8, [0.3, 0.95, 0.7], 0.14 + dec() * 0.1, 8);
+        queueGlow(lx, s.y + 8 + dec() * 10, 7 + dec() * 8, [0.3, 0.95, 0.7], 0.14 + dec() * 0.1, 8);
       }
-      r.setAdditive(false);
       // hazard chevrons near one edge
       if (dec() < 0.55 && s.w > 260) {
         const hx = s.x + 20 + dec() * (s.w - 130);
@@ -726,9 +758,6 @@ function drawSolid(r: Renderer, s: MapRect, t: number, tex: SceneTex): void {
       break;
     }
     case 'rock': {
-      r.setTexture(tex.rock);
-      r.texPoly(P.pts, 300, [0.58, 0.60, 0.74], [0.28, 0.30, 0.40], P.minY, P.maxY);
-      r.setTexture(null);
       r.quad(s.x + 2, s.y, s.w - 4, 4, mix(ROCK_TOP, ACCENT, 0.25), 0.8);
       {
         // embedded crystal veins + lichen on the faces
@@ -738,17 +767,13 @@ function drawSolid(r: Renderer, s: MapRect, t: number, tex: SceneTex): void {
           const fx = onLeft ? s.x + 2 : s.x + s.w - 2;
           const fy = s.y + 60 + dec() * (s.h - 140);
           const dir = onLeft ? -1 : 1;
-          r.setAdditive(true);
-          r.glowDisc(fx + dir * 4, fy, 12, CRYSTAL, 0.22, 8);
-          r.setAdditive(false);
+          queueGlow(fx + dir * 4, fy, 12, CRYSTAL, 0.22, 8);
           r.tri(fx, fy - 6, fx, fy + 6, fx + dir * 9, fy - 1, CRYSTAL, 0.8);
           r.tri(fx, fy + 2, fx, fy + 10, fx + dir * 6, fy + 7, mix(CRYSTAL, [1, 1, 1], 0.25), 0.7);
         }
-        r.setAdditive(true);
         for (let i = 0; i < 2; i++) {
-          r.glowDisc(s.x + 8 + dec() * (s.w - 16), s.y + 20 + dec() * (s.h * 0.4), 6 + dec() * 6, [0.3, 0.95, 0.7], 0.12, 8);
+          queueGlow(s.x + 8 + dec() * (s.w - 16), s.y + 20 + dec() * (s.h * 0.4), 6 + dec() * 6, [0.3, 0.95, 0.7], 0.12, 8);
         }
-        r.setAdditive(false);
       }
       // aircraft-warning beacon on the summit
       const blink = (Math.sin(t * 2.6 + s.x) + 1) / 2;
@@ -759,9 +784,6 @@ function drawSolid(r: Renderer, s: MapRect, t: number, tex: SceneTex): void {
       break;
     }
     case 'plat': {
-      r.setTexture(tex.metal);
-      r.texPoly(P.pts, 128, [0.55, 0.63, 0.76], [0.24, 0.28, 0.40], P.minY, P.maxY);
-      r.setTexture(null);
       r.quad(s.x + 6, s.y, s.w - 12, 2.5, ACCENT, 0.95);        // emissive strip
       r.gradQuad(s.x, s.y - 10, s.w, 10, ACCENT, ACCENT, 0, 0.30);
       r.quad(s.x + 8, s.y + s.h - 5, s.w - 16, 3, [0.05, 0.05, 0.09], 0.8);
@@ -774,38 +796,27 @@ function drawSolid(r: Renderer, s: MapRect, t: number, tex: SceneTex): void {
       }
       // wingtip landing strobes (port red / starboard green)
       const strobe = (Math.sin(t * 5 + s.x * 0.04) + 1) / 2;
-      r.setAdditive(true);
-      r.glowDisc(s.x + 4, s.y + 2, 9, [1, 0.35, 0.3], 0.2 + strobe * 0.45, 8);
-      r.glowDisc(s.x + s.w - 4, s.y + 2, 9, [0.3, 1, 0.5], 0.65 - strobe * 0.45, 8);
-      r.setAdditive(false);
+      queueGlow(s.x + 4, s.y + 2, 9, [1, 0.35, 0.3], 0.2 + strobe * 0.45, 8);
+      queueGlow(s.x + s.w - 4, s.y + 2, 9, [0.3, 1, 0.5], 0.65 - strobe * 0.45, 8);
       // anti-grav emitters underneath
       const pulse = 0.20 + 0.10 * Math.sin(t * 3 + s.x * 0.01);
-      r.setAdditive(true);
-      r.glowDisc(s.x + s.w * 0.22, s.y + s.h + 6, 13, ACCENT, pulse, 10);
-      r.glowDisc(s.x + s.w * 0.78, s.y + s.h + 6, 13, ACCENT, pulse, 10);
-      r.setAdditive(false);
+      queueGlow(s.x + s.w * 0.22, s.y + s.h + 6, 13, ACCENT, pulse, 10);
+      queueGlow(s.x + s.w * 0.78, s.y + s.h + 6, 13, ACCENT, pulse, 10);
       break;
     }
     case 'boulder': {
-      r.setTexture(tex.rock);
-      r.texPoly(P.pts, 220, [0.60, 0.50, 0.74], [0.26, 0.21, 0.36], P.minY, P.maxY);
-      r.setTexture(null);
       r.quad(s.x + s.w * 0.25, s.y + 1.5, s.w * 0.5, 3, mix(BOULDER_TOP, [1, 1, 1], 0.25), 0.7);
       // glowing crystals clustered on the underside
       const by = s.y + s.h;
       const cx1 = s.x + s.w * 0.32, cx2 = s.x + s.w * 0.66;
-      r.setAdditive(true);
-      r.glowDisc(cx1, by + 2, 14, CRYSTAL, 0.30, 8);
-      r.glowDisc(cx2, by + 2, 11, CRYSTAL, 0.26, 8);
-      r.setAdditive(false);
+      queueGlow(cx1, by + 2, 14, CRYSTAL, 0.30, 8);
+      queueGlow(cx2, by + 2, 11, CRYSTAL, 0.26, 8);
       r.tri(cx1 - 5, by, cx1 + 5, by, cx1 + 1, by + 10, CRYSTAL, 0.85);
       r.tri(cx1 + 3, by, cx1 + 9, by, cx1 + 5, by + 6, mix(CRYSTAL, [1, 1, 1], 0.25), 0.8);
       r.tri(cx2 - 4, by, cx2 + 4, by, cx2 - 1, by + 8, CRYSTAL, 0.8);
       // anti-grav shimmer
-      const pulse = 0.10 + 0.07 * Math.sin(t * 2.2 + s.x * 0.02);
-      r.setAdditive(true);
-      r.glowDisc(s.x + s.w / 2, by + 12, s.w * 0.5, [0.6, 0.4, 1.0], pulse, 14);
-      r.setAdditive(false);
+      const pulse2 = 0.10 + 0.07 * Math.sin(t * 2.2 + s.x * 0.02);
+      queueGlow(s.x + s.w / 2, by + 12, s.w * 0.5, [0.6, 0.4, 1.0], pulse2, 14);
       // small captured debris orbiting the asteroid
       const ocx = s.x + s.w / 2, ocy = s.y + s.h / 2;
       for (let d = 0; d < 3; d++) {
@@ -855,9 +866,7 @@ function drawSoldier(r: Renderer, p: SoldierPose, dt: number, t: number, tex: Sc
   // ---- spawn protection shield
   if (p.prot) {
     const pulse = 0.16 + 0.10 * Math.sin(t * 8);
-    r.setAdditive(true);
-    r.glowDisc(p.x, p.y, 44, [0.6, 0.9, 1.0], pulse + 0.15, 16);
-    r.setAdditive(false);
+    queueGlow(p.x, p.y, 44, [0.6, 0.9, 1.0], pulse + 0.15, 16);
   }
 
   // ---- jetpack exhaust behind the body (inverted while diving)
@@ -898,15 +907,13 @@ function drawSoldier(r: Renderer, p: SoldierPose, dt: number, t: number, tex: Sc
 
   // ---- flashbang daze: stars circling overhead
   if (p.dizzy) {
-    r.setAdditive(true);
     for (let i = 0; i < 4; i++) {
       const a = t * 6 + i * (Math.PI / 2);
       const sx2 = p.x + Math.cos(a) * 16;
       const sy2 = top - 54 + Math.sin(a) * 5;
-      r.glowDisc(sx2, sy2, 3.4, [1, 0.92, 0.45], 1, 6);
-      r.glowDisc(sx2, sy2, 7, [1, 0.85, 0.3], 0.35, 6);
+      queueGlow(sx2, sy2, 3.4, [1, 0.92, 0.45], 1, 6);
+      queueGlow(sx2, sy2, 7, [1, 0.85, 0.3], 0.35, 6);
     }
-    r.setAdditive(false);
   }
 
   // ---- primed grenade warning: pulsing red glow at the throwing hand
@@ -914,17 +921,13 @@ function drawSoldier(r: Renderer, p: SoldierPose, dt: number, t: number, tex: Sc
     const hx = p.x + face * 9;
     const hy = p.y - 1;
     drawNadeBody(r, hx, hy, t);
-    r.setAdditive(true);
-    r.glowDisc(hx, hy, 14, [1, 0.25, 0.15], 0.35 + 0.35 * Math.sin(t * 16), 8);
-    r.setAdditive(false);
+    queueGlow(hx, hy, 14, [1, 0.25, 0.15], 0.35 + 0.35 * Math.sin(t * 16), 8);
   }
 
   // ---- bandaging: green medical pulse
   if (p.healing) {
     const a = 0.5 + 0.3 * Math.sin(t * 10);
-    r.setAdditive(true);
-    r.glowDisc(p.x, p.y - 2, 20, [0.3, 1, 0.55], a * 0.4, 10);
-    r.setAdditive(false);
+    queueGlow(p.x, p.y - 2, 20, [0.3, 1, 0.55], a * 0.4, 10);
     r.quad(p.x - 1.5, top - 31, 3, 9, [0.35, 1, 0.6], a);
     r.quad(p.x - 4.5, top - 28, 9, 3, [0.35, 1, 0.6], a);
   }
@@ -1017,6 +1020,27 @@ function drawNades(r: Renderer, nades: RenderNade[], t: number): void {
 const holePoly = new Float32Array(48);
 
 
+// Additive glow discs are queued and drawn in one batch at the end of the
+// world pass: every setAdditive toggle costs a draw call, and scattering
+// them through solids/players was the biggest source of driver overhead.
+const GLOW_Q: number[] = [];
+const GLOW_C: RGB = [0, 0, 0];
+
+function queueGlow(x: number, y: number, rad: number, c: RGB, a: number, segs = 8): void {
+  GLOW_Q.push(x, y, rad, c[0], c[1], c[2], a, segs);
+}
+
+function flushGlows(r: Renderer): void {
+  if (GLOW_Q.length === 0) return;
+  r.setAdditive(true);
+  for (let i = 0; i < GLOW_Q.length; i += 8) {
+    GLOW_C[0] = GLOW_Q[i + 3]; GLOW_C[1] = GLOW_Q[i + 4]; GLOW_C[2] = GLOW_Q[i + 5];
+    r.glowDisc(GLOW_Q[i], GLOW_Q[i + 1], GLOW_Q[i + 2], GLOW_C, GLOW_Q[i + 6], GLOW_Q[i + 7]);
+  }
+  r.setAdditive(false);
+  GLOW_Q.length = 0;
+}
+
 // craters draw nothing at all — the stencil knockout leaves clean edges
 const EMBER_CACHE = new WeakMap<object, boolean>();
 
@@ -1037,10 +1061,8 @@ function drawHoles(r: Renderer, left: number, right: number, topB: number, botto
       EMBER_CACHE.set(h, ember);
     }
     if (ember) {
-      r.setAdditive(true);
       const gl = 0.04 + 0.025 * Math.sin(t * 2 + h.x * 0.05);
-      r.glowDisc(h.x, h.y + h.r * 0.55, h.r * 0.55, [0.9, 0.4, 0.15], gl, 12);
-      r.setAdditive(false);
+      queueGlow(h.x, h.y + h.r * 0.55, h.r * 0.55, [0.9, 0.4, 0.15], gl, 12);
     }
   }
 }
@@ -1114,18 +1136,22 @@ export function drawScene(
     r.stencilWriteEnd('outside');
   }
   if (pandoraReady()) drawPandoraHills(r, left, right);
+  VIS_SOLIDS.length = 0;
   for (const s of SOLIDS) {
     if (s.k === 'wall' || s.ind) continue;
     if (s.x + s.w < left || s.x > right || s.y + s.h < topB || s.y > bottom) continue;
     if (pandoraReady() && s.k === 'ground') continue;   // the hill strip covers these
-    drawSolid(r, s, t, tex);
+    VIS_SOLIDS.push(s);
   }
+  drawSolids(r, VIS_SOLIDS, t, tex);
   if (anyHoles) r.clearStencil();
+  VIS_SOLIDS.length = 0;
   for (const s of SOLIDS) {
     if (s.k === 'wall' || !s.ind) continue;
     if (s.x + s.w < left || s.x > right || s.y + s.h < topB || s.y > bottom) continue;
-    drawSolid(r, s, t, tex);
+    VIS_SOLIDS.push(s);
   }
+  drawSolids(r, VIS_SOLIDS, t, tex);
 
   if (pandoraReady() && PD_META) {
     // bushes rooted along the walkable tops
@@ -1203,6 +1229,7 @@ export function drawScene(
     }, dt, t, tex);
   }
 
+  flushGlows(r);
   effects.draw(r);
   vignette(r);
   r.flush();
