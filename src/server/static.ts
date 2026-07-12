@@ -14,6 +14,7 @@ const MIME: Record<string, string> = {
   '.map': 'application/json',
   '.json': 'application/json',
   '.woff2': 'font/woff2',
+  '.webp': 'image/webp',
 };
 
 export async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<void> {

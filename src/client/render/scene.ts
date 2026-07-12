@@ -46,9 +46,9 @@ let pdLoading = false;
 function loadPandoraAssets(r: Renderer): void {
   if (pdLoading) return;
   pdLoading = true;
-  upgradeTex(r, '/tex/pd_sky.png', false, (t2) => { PD_SKY = t2; });
-  upgradeTex(r, '/tex/pd_grass.png', true, (t2) => { PD_GRASS = t2; });
-  upgradeTex(r, '/tex/pd_flora.png', false, (t2) => { PD_FLORA = t2; });
+  upgradeTex(r, '/tex/pd_sky.webp', false, (t2) => { PD_SKY = t2; });
+  upgradeTex(r, '/tex/pd_grass.webp', true, (t2) => { PD_GRASS = t2; });
+  upgradeTex(r, '/tex/pd_flora.webp', false, (t2) => { PD_FLORA = t2; });
   fetch('/tex/pd_meta.json').then((res) => res.json())
     .then((m: Record<string, PdCell[]>) => { PD_META = m; })
     .catch(() => {});
@@ -116,7 +116,7 @@ function attachAiBody(r: Renderer, b: BodyTex, idx: number | string): void {
     c.getContext('2d')!.drawImage(img, 0, 0);
     b.tex = r.createTexture(c, false);
   };
-  img.src = `/tex/body_${idx}.png`;
+  img.src = `/tex/body_${idx}.webp`;
 }
 
 // swap a procedural texture for a shipped AI-generated one once it loads;
@@ -145,13 +145,13 @@ export function ensureTextures(r: Renderer): SceneTex {
       planet: r.createTexture(makePlanetTexture(), false),
       soldier: r.createTexture(ATLAS.canvas, false),
     };
-    upgradeTex(r, '/tex/rock.png', true, (t) => { TEX!.rock = t; });
-    upgradeTex(r, '/tex/metal.png', true, (t) => { TEX!.metal = t; });
-    upgradeTex(r, '/tex/concrete.png', true, (t) => { TEX!.concrete = t; });
-    upgradeTex(r, '/tex/nebula.png', false, (t) => { TEX!.nebula = t; });
-    upgradeTex(r, '/tex/planet.png', false, (t) => { TEX!.planet = t; });
-    upgradeTex(r, '/tex/guns.png', false, (t) => { TEX!.soldier = t; });
-    upgradeTex(r, '/tex/facades.png', false, (t) => { FACADES = t; });
+    upgradeTex(r, '/tex/rock.webp', true, (t) => { TEX!.rock = t; });
+    upgradeTex(r, '/tex/metal.webp', true, (t) => { TEX!.metal = t; });
+    upgradeTex(r, '/tex/concrete.webp', true, (t) => { TEX!.concrete = t; });
+    upgradeTex(r, '/tex/nebula.webp', false, (t) => { TEX!.nebula = t; });
+    upgradeTex(r, '/tex/planet.webp', false, (t) => { TEX!.planet = t; });
+    upgradeTex(r, '/tex/guns.webp', false, (t) => { TEX!.soldier = t; });
+    upgradeTex(r, '/tex/facades.webp', false, (t) => { FACADES = t; });
     fetch('/tex/facades.json').then((res) => res.json())
       .then((a: number[]) => { FACADE_ASPECTS = a; })
       .catch(() => {});
