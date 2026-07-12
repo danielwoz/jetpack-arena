@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
@@ -27,8 +27,24 @@ export async function serveStatic(req: IncomingMessage, res: ServerResponse): Pr
   }
 
   try {
+    const st = await stat(file);
+    const etag = `"${st.size.toString(16)}-${st.mtimeMs.toString(16)}"`;
+    // vite fingerprints /assets/* so those never change; everything else
+    // revalidates by ETag and gets a cheap 304 on repeat visits
+    const cache = urlPath.startsWith('/assets/')
+      ? 'public, max-age=31536000, immutable'
+      : 'public, max-age=0, must-revalidate';
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { ETag: etag, 'Cache-Control': cache });
+      res.end();
+      return;
+    }
     const data = await readFile(file);
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] ?? 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': MIME[path.extname(file)] ?? 'application/octet-stream',
+      ETag: etag,
+      'Cache-Control': cache,
+    });
     res.end(data);
   } catch {
     if (urlPath === '/index.html') {

@@ -37,12 +37,15 @@ let themeRenderer: Renderer | null = null;
 
 export function setSceneTheme(theme: string, r: Renderer): void {
   if (THEME_OVERRIDE) theme = THEME_OVERRIDE;
-  if (theme === THEME && theme !== 'pandora') return;
   THEME = theme;
   if (theme === 'pandora' && !PD_SKY) loadPandoraAssets(r);
 }
 
+let pdLoading = false;
+
 function loadPandoraAssets(r: Renderer): void {
+  if (pdLoading) return;
+  pdLoading = true;
   upgradeTex(r, '/tex/pd_sky.png', false, (t2) => { PD_SKY = t2; });
   upgradeTex(r, '/tex/pd_grass.png', true, (t2) => { PD_GRASS = t2; });
   upgradeTex(r, '/tex/pd_flora.png', false, (t2) => { PD_FLORA = t2; });
@@ -153,7 +156,9 @@ export function ensureTextures(r: Renderer): SceneTex {
       .then((a: number[]) => { FACADE_ASPECTS = a; })
       .catch(() => {});
     themeRenderer = r;
-    if (THEME === 'pandora') loadPandoraAssets(r);
+    // both maps are in the round rotation, so preload the pandora set now —
+    // behind the join screen — instead of streaming it mid-rotation
+    loadPandoraAssets(r);
     void themeRenderer;
     // pre-bake the standard camo set so new players don't hitch mid-fight
     for (let i = 0; i < CAMO_COUNT; i++) {
