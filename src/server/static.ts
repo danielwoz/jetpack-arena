@@ -1,8 +1,15 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { gzipSync } from 'node:zlib';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const DIST = path.resolve(import.meta.dirname, '../../dist');
+
+// text responses gzip well; images/fonts are already entropy-coded
+const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.svg', '.map', '.json']);
+
+// compress each file once per deploy: cache keyed by path, invalidated by etag
+const GZ_CACHE = new Map<string, { etag: string; data: Buffer }>();
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -36,16 +43,30 @@ export async function serveStatic(req: IncomingMessage, res: ServerResponse): Pr
       ? 'public, max-age=31536000, immutable'
       : 'public, max-age=0, must-revalidate';
     if (req.headers['if-none-match'] === etag) {
-      res.writeHead(304, { ETag: etag, 'Cache-Control': cache });
+      const h: Record<string, string> = { ETag: etag, 'Cache-Control': cache };
+      if (COMPRESSIBLE.has(path.extname(file))) h.Vary = 'Accept-Encoding';
+      res.writeHead(304, h);
       res.end();
       return;
     }
-    const data = await readFile(file);
-    res.writeHead(200, {
-      'Content-Type': MIME[path.extname(file)] ?? 'application/octet-stream',
+    let data: Buffer = await readFile(file);
+    const ext = path.extname(file);
+    const headers: Record<string, string> = {
+      'Content-Type': MIME[ext] ?? 'application/octet-stream',
       ETag: etag,
       'Cache-Control': cache,
-    });
+    };
+    if (COMPRESSIBLE.has(ext) && /\bgzip\b/.test(req.headers['accept-encoding'] ?? '')) {
+      let gz = GZ_CACHE.get(file);
+      if (!gz || gz.etag !== etag) {
+        gz = { etag, data: gzipSync(data) };
+        GZ_CACHE.set(file, gz);
+      }
+      data = gz.data;
+      headers['Content-Encoding'] = 'gzip';
+      headers.Vary = 'Accept-Encoding';
+    }
+    res.writeHead(200, headers);
     res.end(data);
   } catch {
     if (urlPath === '/index.html') {
