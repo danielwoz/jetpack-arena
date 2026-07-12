@@ -193,6 +193,7 @@ const STARS_NEAR = makeStars(202, 140, 3500, 2400);
 
 interface Building {
   x: number; w: number; top: number;
+  base: number;        // facade feet: below the horizon, jittered per row
   windows: [number, number][];      // lit windows on the main mass
   antenna: boolean;
   tone: number;
@@ -221,6 +222,7 @@ function makeCity(seed: number, spanHalf: number, minH: number, maxH: number): B
     const hasTier = r() < 0.45 && w > 130;
     out.push({
       x, w, top, windows,
+      base: WORLD_H + 60 + r() * 380,
       antenna: r() < 0.4, tone: r(),
       tierW: hasTier ? w * (0.4 + r() * 0.25) : 0,
       tierH: 50 + r() * 110,
@@ -230,7 +232,8 @@ function makeCity(seed: number, spanHalf: number, minH: number, maxH: number): B
         ? { y: 60 + r() * 120, h: 34 + r() * 26, hue: r() }
         : null,
     });
-    x += w + 18 + r() * 130;
+    // dense skyline: neighbors touch or overlap through depth
+    x += w * (0.55 + r() * 0.5);
   }
   return out;
 }
@@ -330,26 +333,30 @@ function drawCity(
     const bodyDark = mix(body, [0, 0, 0], 0.55);
     const h = WORLD_H + 500 - b.top;
     const facade = !simple && FACADES && FACADE_ASPECTS;
-    let topV = b.top;
+    const topV = b.top;
     if (facade) {
-      // the building takes its shape from the texture: ONE quad at the
-      // facade's true aspect, transparent sky showing the real nebula
+      // the texture IS the building: one quad at its true aspect with no
+      // painted extras, feet at the jittered baseline, and the bottom edge
+      // stretched far below so the base never floats above the arena floor
       const ci = Math.abs(Math.round(b.x * 0.73 + b.w * 13)) % FACADE_N;
       const aspect = FACADE_ASPECTS![ci] || 0.5;
-      const bh = Math.min(1400, b.w / aspect);
-      // feet just below the horizon line so the full facade reads as skyline
-      topV = WORLD_H + 80 - bh;
+      const bh = Math.min(1500, b.w / aspect);
+      const fTop = b.base - bh;
       const cu = (ci % FACADE_COLS) / FACADE_COLS;
       const cv = Math.floor(ci / FACADE_COLS) / FACADE_ROWS;
-      const tint = mix(lit, [1, 1, 1], 0.45);
+      const tint = mix(lit, [1, 1, 1], 0.3 + b.tone * 0.3);
+      const tintB = mix(tint, [0, 0, 0], 0.6);
       r.setTexture(FACADES);
-      r.texQuadUV(b.x, topV, b.w, bh,
+      r.texQuadUV(b.x, fTop, b.w, bh,
         cu, cv, cu + 1 / FACADE_COLS, cv + 1 / FACADE_ROWS,
-        tint, mix(tint, [0, 0, 0], 0.6));
+        tint, tintB);
+      r.texQuadUV(b.x, b.base, b.w, 900,
+        cu, cv + 0.995 / FACADE_ROWS, cu + 1 / FACADE_COLS, cv + 1 / FACADE_ROWS,
+        tintB, mix(tintB, [0, 0, 0], 0.7));
       r.setTexture(null);
-    } else {
-      r.gradQuad(b.x, b.top, b.w, h, body, bodyDark);
+      continue;
     }
+    r.gradQuad(b.x, b.top, b.w, h, body, bodyDark);
     // muted roofline + soft glow (dimmer than playable platform strips)
     r.gradQuad(b.x, topV - 22, b.w, 22, [ACCENT[0], ACCENT[1], ACCENT[2]], ACCENT, 0, simple ? 0.08 : 0.16);
     r.quad(b.x, topV, b.w, 2, mix(ACCENT, dark, 0.35), simple ? 0.3 : 0.55);
