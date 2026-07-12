@@ -81,26 +81,40 @@ export class World {
   // "closest" holes — the pair whose enclosing circle is smallest, so a big
   // crater never snowballs by eating tiny neighbors. The merged circle fully
   // covers both originals: damage is permanent, count stays fixed.
+  private scratch = { x: new Float64Array(0), y: new Float64Array(0), r: new Float64Array(0) };
+
   private enforceBudget(): void {
-    const CAP = 400;
+    const CAP = 2000;
     while (this.holes.length > CAP) {
       const hs = this.holes;
       const n = hs.length;
+      // flat copies keep the O(n²) pair scan cheap at this cap
+      if (this.scratch.x.length < n) {
+        this.scratch = { x: new Float64Array(n + 256), y: new Float64Array(n + 256), r: new Float64Array(n + 256) };
+      }
+      const { x: xs, y: ys, r: rs } = this.scratch;
+      for (let i = 0; i < n; i++) {
+        xs[i] = hs[i].x;
+        ys[i] = hs[i].y;
+        rs[i] = hs[i].r;
+      }
       let best = Infinity;
       let bi = -1;
       let bj = -1;
       for (let i = 0; i < n; i++) {
-        const a = hs[i];
-        if (a.r >= best) continue;
+        const ar = rs[i];
+        if (ar >= best) continue;
+        const ax = xs[i];
+        const ay = ys[i];
         for (let j = i + 1; j < n; j++) {
-          const b = hs[j];
-          if (b.r >= best) continue;
-          const lim = 2 * best - a.r - b.r;
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
+          const br = rs[j];
+          if (br >= best) continue;
+          const lim = 2 * best - ar - br;
+          const dx = xs[j] - ax;
+          const dy = ys[j] - ay;
           const d2 = dx * dx + dy * dy;
           if (d2 >= lim * lim) continue;
-          const R = Math.max((Math.sqrt(d2) + a.r + b.r) / 2, a.r, b.r);
+          const R = Math.max((Math.sqrt(d2) + ar + br) / 2, ar, br);
           if (R < best) {
             best = R;
             bi = i;
@@ -201,6 +215,17 @@ export class World {
   setHoles(holes: Hole[]): void {
     this.holes = holes.slice(-MAX_HOLES);
     this.reindex();
+  }
+
+  // the hole containing this point, via the grid — never scan the full list
+  holeAt(x: number, y: number): Hole | null {
+    const arr = this.grid.get(World.key(Math.floor(x / CELL), Math.floor(y / CELL)));
+    if (!arr) return null;
+    for (const h of arr) {
+      const dx = x - h.x, dy = y - h.y;
+      if (dx * dx + dy * dy < h.r * h.r) return h;
+    }
+    return null;
   }
 
   inHole(x: number, y: number): boolean {

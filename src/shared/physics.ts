@@ -184,11 +184,7 @@ export function rayVsSolids(
     let guard = 0;
     while (t <= tEnd && guard++ < 24) {
       const px = ox + dx * t, py = oy + dy * t;
-      let inside: { x: number; y: number; r: number } | null = null;
-      for (const h of world.holes) {
-        const hx = px - h.x, hy = py - h.y;
-        if (hx * hx + hy * hy < h.r * h.r) { inside = h; break; }
-      }
+      const inside = world.holeAt(px, py);
       if (!inside) {
         if (best === null || t < best) best = t;
         break;

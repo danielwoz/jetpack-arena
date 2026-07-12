@@ -1020,6 +1020,14 @@ const holePoly = new Float32Array(48);
 // craters draw nothing at all — the stencil knockout leaves clean edges
 const EMBER_CACHE = new WeakMap<object, boolean>();
 
+const HOLE_SEGS = 22;
+const HOLE_COS = new Float32Array(HOLE_SEGS + 1);
+const HOLE_SIN = new Float32Array(HOLE_SEGS + 1);
+for (let i = 0; i <= HOLE_SEGS; i++) {
+  HOLE_COS[i] = Math.cos((i / HOLE_SEGS) * Math.PI * 2);
+  HOLE_SIN[i] = Math.sin((i / HOLE_SEGS) * Math.PI * 2);
+}
+
 function drawHoles(r: Renderer, left: number, right: number, topB: number, bottom: number, t: number): void {
   for (const h of world.holes) {
     if (h.x + h.r < left || h.x - h.r > right || h.y + h.r < topB || h.y - h.r > bottom) continue;
@@ -1096,13 +1104,10 @@ export function drawScene(
     r.stencilWriteBegin();
     for (const h of world.holes) {
       if (h.x + h.r < left || h.x - h.r > right || h.y + h.r < topB || h.y - h.r > bottom) continue;
-      const segs = 22;
-      for (let i = 0; i < segs; i++) {
-        const a0 = (i / segs) * Math.PI * 2;
-        const a1 = ((i + 1) / segs) * Math.PI * 2;
+      for (let i = 0; i < HOLE_SEGS; i++) {
         r.tri(h.x, h.y,
-          h.x + Math.cos(a0) * h.r, h.y + Math.sin(a0) * h.r,
-          h.x + Math.cos(a1) * h.r, h.y + Math.sin(a1) * h.r,
+          h.x + HOLE_COS[i] * h.r, h.y + HOLE_SIN[i] * h.r,
+          h.x + HOLE_COS[i + 1] * h.r, h.y + HOLE_SIN[i + 1] * h.r,
           [1, 1, 1], 1);
       }
     }
