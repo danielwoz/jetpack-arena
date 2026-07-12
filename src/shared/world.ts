@@ -81,29 +81,42 @@ export class World {
           if (arr) for (const o of arr) cand.add(o);
         }
       }
+      const drop = (hole: Hole): boolean => {
+        const i = this.holes.indexOf(hole);
+        if (i < 0) return false;         // stale grid entry — already gone
+        this.holes.splice(i, 1);
+        return true;
+      };
       for (const o of cand) {
         if (o === h) continue;
         const d = Math.hypot(o.x - h.x, o.y - h.y);
-        if (d + o.r <= h.r + 2) {
-          this.holes.splice(this.holes.indexOf(o), 1);
-          changed = true;
-        } else if (d + h.r <= o.r + 2) {
-          this.holes.splice(this.holes.indexOf(h), 1);
-          h = o;
-          changed = true;
-        } else {
-          // merge only near-total overlaps so the carved shape is preserved
-          const R = (d + h.r + o.r) / 2;
-          if (R <= Math.max(h.r, o.r) * 1.1) {
-            const t = d > 0 ? (R - h.r) / d : 0;
-            const merged = { x: h.x + (o.x - h.x) * t, y: h.y + (o.y - h.y) * t, r: R };
-            this.holes.splice(this.holes.indexOf(o), 1);
-            this.holes.splice(this.holes.indexOf(h), 1);
-            this.holes.push(merged);
-            h = merged;
+        // STRICTLY subtractive: drop a hole only when its neighbor fully
+        // covers it — terrain must never regrow mid-round
+        if (d + o.r <= h.r) {
+          changed = drop(o);
+        } else if (d + h.r <= o.r) {
+          if (drop(h)) {
+            h = o;
             changed = true;
           }
+        } else {
+          // merge only near-total overlaps; the enclosing circle (plus an
+          // epsilon for float safety) is a superset of both
+          const R = (d + h.r + o.r) / 2 + 0.5;
+          if (R <= Math.max(h.r, o.r) * 1.1) {
+            const okO = drop(o);
+            const okH = drop(h);
+            if (okO || okH) {
+              const t = d > 0 ? (R - h.r - 0.5) / d : 0;
+              const merged = { x: h.x + (o.x - h.x) * t, y: h.y + (o.y - h.y) * t, r: R };
+              this.holes.push(merged);
+              h = merged;
+              changed = true;
+            }
+          }
         }
+        // candidates went stale the moment anything changed: re-gather
+        if (changed) break;
       }
       if (!changed) break;
       this.reindex();
