@@ -14,5 +14,5 @@ git fetch origin --tags
 git checkout -q "$TAG"
 npm ci --silent
 npm run build
-sudo systemctl restart webfps
+ssh root@localhost 'systemctl restart webfps'
 echo "stable is now $TAG"
