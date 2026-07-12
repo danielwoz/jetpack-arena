@@ -10,7 +10,7 @@ export const TUNE = {
   fallSoftVy: 2000,          // land slower than this: no harm
   fallLethalVy: 3000,        // land at this or faster: 100 damage
   // jetpack
-  fuelDrain: 6.7,
+  fuelDrain: 7,
   fuelRegen: 70,
   fuelRegenGroundMult: 6,
   overdriveThrustMult: 2,

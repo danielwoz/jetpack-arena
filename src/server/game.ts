@@ -162,7 +162,7 @@ export class GameRoom {
   }
 
   start(): void {
-    setMap(process.env.MAP ?? 'city');
+    setMap(process.env.MAP ?? MAP_NAMES[Math.floor(Math.random() * MAP_NAMES.length)]);
 
     let next = performance.now();
     const loop = (): void => {

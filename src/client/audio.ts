@@ -324,7 +324,7 @@ export class GameAudio {
     lp.frequency.value = 240;
     lp.connect(this.music);
     this.musicNodes.push(lp);
-    for (const [f, g] of [[55, 0.055], [82.5, 0.03], [55.6, 0.03]] as const) {
+    for (const [f, g] of [[55, 0.0275], [82.5, 0.015], [55.6, 0.015]] as const) {
       const o = ctx.createOscillator();
       o.type = 'sawtooth';
       o.frequency.value = f;
@@ -354,7 +354,7 @@ export class GameAudio {
         o.frequency.value = f;
         const og = ctx.createGain();
         og.gain.setValueAtTime(0.0001, t);
-        og.gain.exponentialRampToValueAtTime(0.09, t + 0.9);
+        og.gain.exponentialRampToValueAtTime(0.045, t + 0.9);
         og.gain.exponentialRampToValueAtTime(0.0001, t + 4.5);
         o.connect(og);
         og.connect(this.music);
