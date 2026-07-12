@@ -101,9 +101,11 @@ export class World {
           }
         } else {
           // merge only near-total overlaps; the enclosing circle (plus an
-          // epsilon for float safety) is a superset of both
+          // epsilon for float safety) is a superset of both. The absolute
+          // cap stops chained merges from snowballing without bound.
+          const MERGE_CAP = 110;
           const R = (d + h.r + o.r) / 2 + 0.5;
-          if (R <= Math.max(h.r, o.r) * 1.1) {
+          if (R <= Math.max(h.r, o.r) * 1.1 && R <= MERGE_CAP) {
             const okO = drop(o);
             const okH = drop(h);
             if (okO || okH) {
