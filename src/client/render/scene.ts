@@ -237,7 +237,6 @@ function makeCity(seed: number, spanHalf: number, minH: number, maxH: number): B
   }
   return out;
 }
-const CITY_VFAR = makeCity(97, 1600, 60, 210);
 // heights are absolute pixels on screen (parallax scales positions, not
 // sizes) — keep distant buildings short so they read as a far skyline
 const CITY_FAR = makeCity(7, 1950, 130, 360);
@@ -919,7 +918,6 @@ export function drawScene(
   drawSky(r, cam, tex);
   drawStars(r, cam, t);
   drawNebulaAndPlanet(r, cam, t, tex);
-  drawCity(r, cam, CITY_VFAR, 0.08, [0.04, 0.045, 0.10], [0.06, 0.07, 0.14], t, false, true);
   drawCity(r, cam, CITY_FAR, 0.16, [0.055, 0.06, 0.13], [0.09, 0.10, 0.19], t, true);
   drawCity(r, cam, CITY_NEAR, 0.34, [0.075, 0.085, 0.16], [0.12, 0.13, 0.23], t, false);
 
