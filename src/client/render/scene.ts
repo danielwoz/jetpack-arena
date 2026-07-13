@@ -326,7 +326,7 @@ function drawPandoraHills(r: Renderer, left: number, right: number): void {
     const tb = hillTopCurve(x + S + S / 2) - 12;
     // texPoly's UVs are world-anchored, so the meadow tiles continuously
     r.texPoly(new Float32Array([x, ta, x + S, tb, x + S, 3000, x, 3000]),
-      512, [0.72, 0.85, 0.66], [0.24, 0.36, 0.27], Math.min(ta, tb), 3000);
+      512, [0.85, 0.98, 0.78], [0.30, 0.44, 0.34], Math.min(ta, tb), 3000);
     // sunlit crest lip following the slope
     r.quad(x, ta, S, 5, [0.45, 0.85, 0.4], 0.45);
   }
@@ -351,7 +351,7 @@ function drawCoverSky(r: Renderer, cam: Camera, tex: Texture, imgAspect: number,
 
 function drawPandoraSky(r: Renderer, cam: Camera): void {
   const alt = 1 - cam.y / WORLD_H;
-  drawCoverSky(r, cam, PD_SKY!, 2, 1 - alt * 0.2);
+  drawCoverSky(r, cam, PD_SKY!, 2, 0.8 - alt * 0.2);
 }
 
 function drawJungleLayer(r: Renderer, cam: Camera, layer: Flora[], f: number, dim: number): void {
@@ -671,27 +671,27 @@ function drawSolids(r: Renderer, list: readonly MapRect[], t: number, tex: Scene
         case 'ground':
           r.setTexture(grassy ? PD_GRASS : tex.concrete);
           if (grassy) {
-            r.texPoly(P.pts, 340, [0.72, 0.85, 0.66], [0.28, 0.40, 0.30], P.minY, P.maxY);
+            r.texPoly(P.pts, 340, [0.85, 0.98, 0.78], [0.34, 0.48, 0.37], P.minY, P.maxY);
           } else {
-            r.texPoly(P.pts, 340, [0.62, 0.68, 0.74], [0.30, 0.33, 0.42], P.minY, P.maxY);
+            r.texPoly(P.pts, 340, [0.92, 0.98, 1.04], [0.48, 0.53, 0.64], P.minY, P.maxY);
           }
           break;
         case 'rock':
           r.setTexture(tex.rock);
-          r.texPoly(P.pts, 300, [0.58, 0.60, 0.74], [0.28, 0.30, 0.40], P.minY, P.maxY);
+          r.texPoly(P.pts, 300, [0.86, 0.89, 1.04], [0.46, 0.49, 0.62], P.minY, P.maxY);
           break;
         case 'plat':
           r.setTexture(tex.metal);
-          r.texPoly(P.pts, 128, [0.55, 0.63, 0.76], [0.24, 0.28, 0.40], P.minY, P.maxY);
+          r.texPoly(P.pts, 128, [0.82, 0.92, 1.06], [0.40, 0.46, 0.62], P.minY, P.maxY);
           break;
         case 'boulder': {
           const c = spriteCell(s);
           if (c) {
             r.setTexture(PD_FLORA);
-            r.texQuadUV(s.x, s.y, s.w, s.h, c.u0, c.v0, c.u1, c.v1, [1, 1, 1], [0.75, 0.8, 0.8]);
+            r.texQuadUV(s.x, s.y, s.w, s.h, c.u0, c.v0, c.u1, c.v1, [1.15, 1.15, 1.15], [0.9, 0.94, 0.94]);
           } else {
             r.setTexture(tex.rock);
-            r.texPoly(P.pts, 220, [0.60, 0.50, 0.74], [0.26, 0.21, 0.36], P.minY, P.maxY);
+            r.texPoly(P.pts, 220, [0.88, 0.76, 1.04], [0.42, 0.36, 0.56], P.minY, P.maxY);
           }
           break;
         }
@@ -1101,7 +1101,7 @@ export function drawScene(
 
   if (pandoraReady()) {
     drawPandoraSky(r, cam);
-    drawJungleLayer(r, cam, JUNGLE_FAR, 0.10, 0.7);
+    drawJungleLayer(r, cam, JUNGLE_FAR, 0.10, 0.55);
   } else {
   drawSky(r, cam, tex);
   drawStars(r, cam, t);
@@ -1173,7 +1173,7 @@ export function drawScene(
         const bx = s2.x + 20 + dec() * (s2.w - 40 - bw);
         // a bush dies with the ground under it
         if (!world.solidAt(bx + bw / 2, s2.y + 8)) continue;
-        r.texQuadUV(bx, s2.y - bh + 2, bw, bh, c.u0, c.v0, c.u1, c.v1, [1, 1, 1], [0.8, 0.85, 0.8]);
+        r.texQuadUV(bx, s2.y - bh + 2, bw, bh, c.u0, c.v0, c.u1, c.v1, [1.1, 1.1, 1.1], [0.9, 0.95, 0.9]);
       }
     }
     r.setTexture(null);
