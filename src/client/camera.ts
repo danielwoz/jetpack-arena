@@ -8,10 +8,11 @@ export class Camera {
   y = WORLD_H / 2;
   viewW = 1600;
   viewH = VIEW_H;
+  zoom = 1;                  // >1 pulls back to show more of the world
 
   updateAspect(canvasW: number, canvasH: number): void {
-    this.viewH = VIEW_H;
-    this.viewW = VIEW_H * (canvasW / Math.max(1, canvasH));
+    this.viewH = VIEW_H * this.zoom;
+    this.viewW = this.viewH * (canvasW / Math.max(1, canvasH));
   }
 
   follow(tx: number, ty: number, dt: number): void {

@@ -24,6 +24,8 @@ export const TUNE = {
   magsSpawn: 2,
   magsMax: 3,
   nadesPerKill: 1,
+  // camera
+  camLead: 0.5,              // view shift toward the cursor (fraction of view)
   // bandages
   bandagesSpawn: 5,
   bandagesPerKill: 1,
