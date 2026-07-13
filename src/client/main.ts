@@ -1,6 +1,7 @@
 import { FLASH_BLIND_SECS, FLASH_RADIUS, PLAYER_HH, TICK_MS } from '../shared/constants.ts';
-import { lerp } from '../shared/math.ts';
+import { clamp, lerp } from '../shared/math.ts';
 import { NADES, WEAPONS, reloadTicks, spreadRad } from '../shared/weapons.ts';
+import { TUNE } from '../shared/tuning.ts';
 import type { PlayerState, Snapshot } from '../shared/types.ts';
 import { audio } from './audio.ts';
 import { CAMO_COUNT } from './render/soldier.ts';
@@ -176,6 +177,9 @@ let deathCamT = 0;
 let corpse: { x: number; y: number; vx: number; vy: number } | null = null;
 let pendingKiller: string | null = null;
 let spawnFade = 0; // 1 → 0 over 2 s after spawning
+let camZoom = 1; // eased toward 2 while the marksman zoom is held
+let leadCurX = 0; // cursor lead, smoothed slower than the camera
+let leadCurY = 0;
 let spawnSeen = false;
 let started = false;
 let wasAlive = false;
@@ -366,6 +370,7 @@ function fixedStep(): void {
   remotes: () => remotes,
   snap: () => interp.latest(),
   myId: () => net?.myId ?? -1,
+  cam: () => ({ x: camera.x, y: camera.y, vw: camera.viewW, vh: camera.viewH }),
   screenOf: (id: number) => {
     const rp = remotes.find((p) => p.id === id);
     if (!rp) return null;
@@ -458,7 +463,37 @@ function render(dtSec: number, alpha: number): void {
   spawnSeen = st.alive;
   spawnFade = Math.max(0, spawnFade - dtSec / 2);
 
-  if (st.alive) camera.follow(rx, ry, dtSec);
+  // right mouse: marksman overwatch — with the SLR or M24 in hand the whole
+  // view pulls back to twice the distance in every direction
+  const wantZoom = input.zoomHeld && st.alive && (st.weapon === 'dmr' || st.weapon === 'sniper');
+  camZoom += ((wantZoom ? 2 : 1) - camZoom) * (1 - Math.exp(-8 * dtSec));
+  camera.zoom = camZoom;
+  lensCam.zoom = camZoom;
+  camera.updateAspect(glCanvas.clientWidth, glCanvas.clientHeight);
+
+  if (st.alive) {
+    // the camera leads toward the cursor so you can peek where you aim,
+    // but only once the cursor passes halfway from center to a screen edge
+    // (per axis, so the horizontal threshold sits proportionally further
+    // out on a wide screen). The ramp eases in quadratically — barely
+    // moving at the threshold, full lead at the edge — and the lead itself
+    // is smoothed slower than the camera so engaging it never yanks the
+    // view. The world-bounds clamp still applies past the map edge.
+    const leadFrac = (f: number): number => {
+      const a = Math.abs(f);
+      if (a <= 0.25) return 0;
+      const t = (a - 0.25) / 0.25;
+      return Math.sign(f) * t * t * 0.5;
+    };
+    const cw = glCanvas.clientWidth || 1;
+    const ch = glCanvas.clientHeight || 1;
+    const targetX = leadFrac(clamp(input.mouseX / cw - 0.5, -0.5, 0.5)) * camera.viewW * TUNE.camLead;
+    const targetY = leadFrac(clamp(input.mouseY / ch - 0.5, -0.5, 0.5)) * camera.viewH * TUNE.camLead;
+    const lk = 1 - Math.exp(-4 * dtSec);
+    leadCurX += (targetX - leadCurX) * lk;
+    leadCurY += (targetY - leadCurY) * lk;
+    camera.follow(rx + leadCurX, ry + leadCurY, dtSec);
+  }
 
   // frag blast screen shake, decaying fast
   if (shakeAmp > 0.3) {
@@ -525,7 +560,10 @@ function render(dtSec: number, alpha: number): void {
   drawScene(renderer, camera, remotes, selfRP, nades, fires, effects, dtSec, spawnFade);
 
   // right-mouse magnifier: a 2× lens around the cursor for headshot work
-  if (input.zoomHeld && st.alive) {
+  // magnifier lens, retired in favor of the marksman camera zoom-out;
+  // kept around in case it returns as a scope attachment
+  const LENS_ENABLED = false;
+  if (LENS_ENABLED && input.zoomHeld && st.alive) {
     const cw = glCanvas.clientWidth;
     const ch = glCanvas.clientHeight;
     const scale = renderer.width / Math.max(1, cw);

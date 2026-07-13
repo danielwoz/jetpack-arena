@@ -8,7 +8,7 @@ import type { RGB, Renderer } from './render/gl.ts';
 // (speed + gravity + terrain), drawn as a short moving streak.
 interface CosmeticBullet {
   x: number; y: number; vx: number; vy: number;
-  color: RGB; life: number; maxLen: number; scale: number;
+  color: RGB; life: number; maxLen: number; scale: number; bright?: boolean;
 }
 
 interface Particle {
@@ -28,6 +28,8 @@ export class Effects {
   private bullets: CosmeticBullet[] = [];
   private particles: Particle[] = [];
   private flashes: Flash[] = [];
+  // lingering white afterimage of the bolt round's flight path
+  private beams: { x1: number; y1: number; x2: number; y2: number; age: number; ttl: number }[] = [];
 
   // ox/oy: muzzle for the flash; bullets launch from the body center like
   // the server's authoritative rounds so trajectories match.
@@ -41,9 +43,12 @@ export class Effects {
         x: cx, y: cy,
         vx: Math.cos(a) * w.speed,
         vy: Math.sin(a) * w.speed,
-        color: w.color, life: Math.min(weapon === 'mk47' ? 0.4 : Infinity, (w.range ?? MAX_RANGE) / w.speed),
-        maxLen: weapon === 'sniper' ? 60 : 30,
-        scale: weapon === 'sniper' ? 2 : 1,
+        // marksman rounds fly as thin bright-white streaks (SLR: half length)
+        color: weapon === 'sniper' || weapon === 'dmr' ? [1, 1, 1] : w.color,
+        life: Math.min(weapon === 'mk47' ? 0.4 : Infinity, (w.range ?? MAX_RANGE) / w.speed),
+        maxLen: weapon === 'sniper' ? 100 : weapon === 'dmr' ? 50 : 30,
+        scale: weapon === 'sniper' ? 1.2 : weapon === 'dmr' ? 1.1 : 1,
+        bright: weapon === 'sniper' || weapon === 'dmr',
       });
     }
     const color = w.color;
@@ -237,6 +242,7 @@ export class Effects {
           this.spawnHitSpark(b.x, b.y);
           dead = true;
         } else {
+          if (b.bright) this.beams.push({ x1: b.x, y1: b.y, x2: nx, y2: ny, age: 0, ttl: 0.15 });
           b.x = nx;
           b.y = ny;
         }
@@ -244,6 +250,11 @@ export class Effects {
         if (b.life <= 0) dead = true;
       }
       if (dead) this.bullets.splice(i, 1);
+    }
+    for (let i = this.beams.length - 1; i >= 0; i--) {
+      const bm = this.beams[i];
+      bm.age += dt;
+      if (bm.age >= bm.ttl) this.beams.splice(i, 1);
     }
   }
 
@@ -258,14 +269,19 @@ export class Effects {
 
     // glow pass
     r.setAdditive(true);
+    for (const bm of this.beams) {
+      const a = 1 - bm.age / bm.ttl;
+      r.line(bm.x1, bm.y1, bm.x2, bm.y2, 9, [1, 1, 1], a * 0.3);       // halo
+      r.line(bm.x1, bm.y1, bm.x2, bm.y2, 3.2, [1, 1, 1], a);           // core
+    }
     for (const b of this.bullets) {
       // short streak trailing the round
       const sp = Math.hypot(b.vx, b.vy) || 1;
       const len = Math.min(b.maxLen, sp * 0.012);
       const tx = b.x - (b.vx / sp) * len;
       const ty = b.y - (b.vy / sp) * len;
-      r.line(tx, ty, b.x, b.y, 7 * b.scale, b.color, b.scale > 1 ? 0.85 : 0.35);   // halo
-      r.line(tx, ty, b.x, b.y, 2.4 * b.scale, b.scale > 1 ? [1, 0.55, 0.45] : [1, 1, 0.95], 0.95);  // core
+      r.line(tx, ty, b.x, b.y, 7 * b.scale, b.color, b.bright ? 0.85 : 0.35);   // halo
+      r.line(tx, ty, b.x, b.y, 2.4 * b.scale, [1, 1, 0.95], 0.95);              // core
     }
     for (const f of this.flashes) {
       const a = 1 - f.age / f.ttl;

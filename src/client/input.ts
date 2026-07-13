@@ -186,6 +186,7 @@ export class Input {
       reload: this.reloadQueued,
       heal: this.healQueued,
       nade: this.has('nade') || padHold('nade'),
+      zoom: this.zoomHeld,
       rt
     };
     if (!this.has('scores')) this.scoreboardHeld = padHold('scores');

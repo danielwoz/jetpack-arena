@@ -35,6 +35,7 @@ export interface InputCmd {
   reload: boolean;
   heal: boolean;       // Q pressed this tick — start a bandage
   nade: boolean;       // E held — priming a grenade
+  zoom: boolean;       // right mouse — marksman zoom-out (extends SLR/M24 range)
   rt: number;          // fractional server tick the client is rendering remotes at (lag comp)
 }
 

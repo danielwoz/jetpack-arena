@@ -129,6 +129,7 @@ export interface Bullet {
 // spread, and tell every client the true angles for cosmetic tracers.
 export function fireBullets(
   world: CombatWorld, shooter: CombatPlayer, rt: number, bullets: Bullet[],
+  zoomed = false,
 ): void {
   const st = shooter.state;
   const w = WEAPONS[st.weapon];
@@ -140,6 +141,8 @@ export function fireBullets(
     ? 0
     : clamp(world.tick - rt, 0, LAGCOMP_MAX_TICKS);
   const spread = spreadRad(st.weapon, st.onGround ? 0 : st.heat);
+  // marksman zoom-out doubles reach so bullets fly as far as the eye sees
+  const rangeMult = zoomed && (st.weapon === 'dmr' || st.weapon === 'sniper') ? 2 : 1;
 
   const angles: number[] = [];
   for (let i = 0; i < w.pellets; i++) {
@@ -150,7 +153,7 @@ export function fireBullets(
       vx: Math.cos(a) * w.speed,
       vy: Math.sin(a) * w.speed,
       weapon: st.weapon, owner: shooter.id, rewindOff,
-      life: (w.range ?? MAX_RANGE) / w.speed, dist: 0, hit: [], spent: false,
+      life: ((w.range ?? MAX_RANGE) * rangeMult) / w.speed, dist: 0, hit: [], spent: false,
     });
   }
   world.events.push({
@@ -241,11 +244,17 @@ const PIERCING = new Set<PlayerState['weapon']>(['rifle', 'ak47', 'mk47', 'dmr',
 const CHANNEL: Partial<Record<PlayerState['weapon'], { r: number; len: number }>> = {
   rifle: { r: 5, len: 34 }, ak47: { r: 5, len: 34 }, mk47: { r: 5, len: 34 },
   m249: { r: 8, len: 34 },
-  dmr: { r: 3.5, len: 68 }, sniper: { r: 3.5, len: 102 },
+  dmr: { r: 3.5, len: 68 }, sniper: { r: 3.5, len: 204 },
 };
 // rounds only chip terrain up close — past 75% of a screen width the hit
 // still lands (and still stops the bullet), it just leaves no channel
 const ENV_DMG_RANGE = VIEW_H * (16 / 9) * 0.75;
+
+// marksman rounds are long projectiles, not points: anything their body
+// overlaps during a tick counts, which forgives near-miss timing
+const BULLET_BODY: Partial<Record<PlayerState['weapon'], number>> = {
+  sniper: 100, dmr: 50,
+};
 
 export function stepBullets(world: CombatWorld, bullets: Bullet[]): void {
   for (let i = bullets.length - 1; i >= 0; i--) {
@@ -269,10 +278,14 @@ export function stepBullets(world: CombatWorld, bullets: Bullet[]): void {
       if (b.hit.includes(v.id)) continue;
       const pos = world.lagcomp.sample(v.id, sampleTick);
       if (!pos) continue;
-      const t = rayVsRect(b.x, b.y, dirX, dirY, {
+      // the trailing body starts behind the tip (never before the muzzle)
+      const back = b.dist > 0 ? BULLET_BODY[b.weapon] ?? 0 : 0;
+      const t0 = rayVsRect(b.x - dirX * back, b.y - dirY * back, dirX, dirY, {
         x: pos.x - PLAYER_HW, y: pos.y - PLAYER_HH, w: PLAYER_W, h: PLAYER_H,
       });
-      if (t === null || t > segLen || t >= wallT) continue;
+      if (t0 === null) continue;
+      const t = t0 - back;
+      if (t > segLen || t >= wallT) continue;
       if (pierce) {
         crossed.push({ v, t });
       } else if (t < bestT) {

@@ -96,6 +96,7 @@ function spawnBot(i: number): void {
     if (nadeHold > 0) nadeHold--;
     const cmd: InputCmd = {
       seq: seq++, mx, up, dn: false, jump, sprint: false, slot: 0, aim,
+      zoom: false,
       fire: fire && nadeHold === 0,
       reload: Math.random() < 0.002,
       heal: hurt && Math.random() < 0.02,
