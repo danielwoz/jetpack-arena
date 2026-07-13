@@ -163,6 +163,8 @@ let corpse: { x: number; y: number; vx: number; vy: number } | null = null;
 let pendingKiller: string | null = null;
 let spawnFade = 0;       // 1 → 0 over 2 s after spawning
 let camZoom = 1;         // eased toward 2 while the marksman zoom is held
+let leadCurX = 0;        // cursor lead, smoothed slower than the camera
+let leadCurY = 0;
 let spawnSeen = false;
 let started = false;
 let wasAlive = false;
@@ -461,17 +463,24 @@ function render(dtSec: number, alpha: number): void {
     // the camera leads toward the cursor so you can peek where you aim,
     // but only once the cursor passes halfway from center to a screen edge
     // (per axis, so the horizontal threshold sits proportionally further
-    // out on a wide screen); it then ramps to full lead at the edge. The
-    // world-bounds clamp still applies, so it never shows past the map.
+    // out on a wide screen). The ramp eases in quadratically — barely
+    // moving at the threshold, full lead at the edge — and the lead itself
+    // is smoothed slower than the camera so engaging it never yanks the
+    // view. The world-bounds clamp still applies past the map edge.
     const leadFrac = (f: number): number => {
       const a = Math.abs(f);
-      return a <= 0.25 ? 0 : Math.sign(f) * (a - 0.25) * 2;
+      if (a <= 0.25) return 0;
+      const t = (a - 0.25) / 0.25;
+      return Math.sign(f) * t * t * 0.5;
     };
     const cw = glCanvas.clientWidth || 1;
     const ch = glCanvas.clientHeight || 1;
-    const leadX = leadFrac(clamp(input.mouseX / cw - 0.5, -0.5, 0.5)) * camera.viewW * TUNE.camLead;
-    const leadY = leadFrac(clamp(input.mouseY / ch - 0.5, -0.5, 0.5)) * camera.viewH * TUNE.camLead;
-    camera.follow(rx + leadX, ry + leadY, dtSec);
+    const targetX = leadFrac(clamp(input.mouseX / cw - 0.5, -0.5, 0.5)) * camera.viewW * TUNE.camLead;
+    const targetY = leadFrac(clamp(input.mouseY / ch - 0.5, -0.5, 0.5)) * camera.viewH * TUNE.camLead;
+    const lk = 1 - Math.exp(-4 * dtSec);
+    leadCurX += (targetX - leadCurX) * lk;
+    leadCurY += (targetY - leadCurY) * lk;
+    camera.follow(rx + leadCurX, ry + leadCurY, dtSec);
   }
 
   // frag blast screen shake, decaying fast
