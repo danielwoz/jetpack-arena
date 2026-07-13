@@ -270,11 +270,7 @@ body.playing {
   background-position: center;
   background-color: transparent;
   opacity: 1;
-  filter:
-    brightness(1.04)
-    contrast(1.14)
-    drop-shadow(0 0 2px rgba(170, 205, 255, 0.35))
-    drop-shadow(0 0 8px rgba(110, 155, 235, 0.22));
+  filter: brightness(1.04) contrast(1.14) drop-shadow(0 0 2px rgba(170, 205, 255, 0.35)) drop-shadow(0 0 8px rgba(110, 155, 235, 0.22));
 }
 .weapon-icon.pending {
   display: grid;
@@ -394,23 +390,75 @@ button.minor {
   accent-color: #5b82e8;
 }
 
+.setrow.pad-focus {
+  outline: 1px solid #5b82e8;
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+button.pad-focus {
+  outline: 2px solid #5b82e8;
+  filter: brightness(1.2);
+}
+
 #bindlist {
   margin: 0 auto 18px;
   max-width: 420px;
 }
 .bindrow {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto auto;
+  gap: 8px;
   align-items: center;
   padding: 6px 4px;
   border-bottom: 1px solid #1d2946;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.bindrow-header {
+  cursor: default;
+  border-bottom: 1px solid #2c3a5e;
+  padding-bottom: 8px;
+  margin-bottom: 2px;
+}
+.bindrow-header span {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #566187;
+  text-align: right;
+}
+.bindrow-header span:first-child {
+  text-align: left;
+}
+.bindrow:hover:not(.bindrow-header) {
+  background: rgba(91, 130, 232, 0.07);
+}
+.bindrow.pad-focus {
+  background: rgba(91, 130, 232, 0.14);
+  outline: 1px solid #5b82e8;
 }
 .bindrow .blabel {
   font-size: 14px;
   color: #b9c8e8;
 }
-.keybtn {
+.bkb,
+.bpad {
+  font-size: 13px;
   min-width: 110px;
+  color: #7d8bb0;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.bkb.listening,
+.bpad.listening {
+  color: #ffb27a;
+  animation: pulse 0.6s infinite;
+}
+.bindrow.pad-focus .bpad {
+  color: #9fc2ff;
+}
+.keybtn {
+  min-width: 120px;
   padding: 6px 14px;
   font-size: 13px;
   letter-spacing: 1px;

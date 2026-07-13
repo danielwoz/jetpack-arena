@@ -39,20 +39,43 @@ Connects headless players that wander, jet around, and shoot back.
 
 ## Controls
 
-| Input | Action |
-|---|---|
-| A / D or ◀ / ▶ | move left / right |
-| W or ▲ | jetpack boost (~15 s of burn; refuels 6× faster on the ground) |
-| S or ▼ | invert the jetpack — powered dive |
-| Shift | sprint (2× ground speed) / jet overdrive (2× thrust, 3× burn) |
-| Space | jump — launches faster than the jets and feeds into an ascent |
-| 1 / 2 / 3 | weapon slots: primary, long gun, sidearm |
-| Mouse | aim (360°) |
-| Left click | fire |
-| R | reload |
-| Q | bandage — 1 s channel, +20 hp; spawn with 5, +1 per kill |
-| E (hold) | prime a grenade — fuse runs from the press; release to throw |
-| Tab (hold) | scoreboard |
+| Input          | Action                                                         |
+| -------------- | -------------------------------------------------------------- |
+| A / D or ◀ / ▶ | move left / right                                              |
+| W or ▲         | jetpack boost (~15 s of burn; refuels 6× faster on the ground) |
+| S or ▼         | invert the jetpack — powered dive                              |
+| Shift          | sprint (2× ground speed) / jet overdrive (2× thrust, 3× burn)  |
+| Space          | jump — launches faster than the jets and feeds into an ascent  |
+| 1 / 2 / 3      | weapon slots: primary, long gun, sidearm                       |
+| Mouse          | aim (360°)                                                     |
+| Left click     | fire                                                           |
+| R              | reload                                                         |
+| Q              | bandage — 1 s channel, +20 hp; spawn with 5, +1 per kill       |
+| E (hold)       | prime a grenade — fuse runs from the press; release to throw   |
+| Tab (hold)     | scoreboard                                                     |
+
+Gamepads are supported (standard browser Gamepad API layouts).
+
+| Input                 | Action                        |
+| --------------------- | ----------------------------- |
+| Left stick / D-pad ◀▶ | move left / right             |
+| B                     | jetpack boost                 |
+| D-pad ▼               | jetpack dive                  |
+| A                     | jump                          |
+| LT                    | sprint / jet overdrive        |
+| RT                    | fire (fixed — not rebindable) |
+| Y                     | cycle weapon slots            |
+| X                     | reload                        |
+| LB                    | bandage                       |
+| RB                    | grenade (hold)                |
+| VIEW                  | scoreboard (hold)             |
+| Right stick           | aim (360°)                    |
+
+The crosshair orbits the player at the last aimed direction; moving the mouse switches back to mouse aim. Stick sensitivity and deadzone are adjustable in CONTROLS.
+
+All actions above are rebindable in the CONTROLS screen. Navigate to a row with the D-pad, press **A** to set a new controller button for that action, or click a row with the mouse to set a keyboard key.
+
+**Controller menu navigation** — D-pad or left stick scrolls through items; **A** selects; **B** closes the current modal or returns to the Loadout tab from Controls/Settings; **Start (Menu)** opens/closes Settings in-game, or deploys from the Loadout tab. On the join screen **LB / RB** cycles between the LOADOUT, CONTROLS, and SETTINGS tabs. In the Settings and Controls panels, navigate sliders with up/down and left/right to adjust, then continue down to reach the action buttons (navigated left/right).
 
 The game renders a fixed 16:9 view (black bars fill the rest) so no monitor
 shape sees further than another. Red arrows at the screen edge point to
@@ -61,8 +84,7 @@ A red ring marks your soldier for the first two seconds after every spawn.
 A minimap above the health bar tracks every combatant — you in green,
 everyone else in orange.
 
-All keys are rebindable (CONTROLS on the join screen). ESC → SETTINGS →
-ADMIN opens live tuning: fall damage, jet fuel rates, sprint multipliers,
+All keys and controller buttons are rebindable (CONTROLS on the join screen, or ESC → SETTINGS → INPUT / KEY BINDINGS in-game). fall damage, jet fuel rates, sprint multipliers,
 every weapon stat, bot difficulty, bandage economy and more — changes apply
 instantly to the server and every connected player (open to all players for
 now, and reset to defaults on server restart). SETTINGS — on the
@@ -100,20 +122,20 @@ bots, and it rotates them out one per second as real players join.
 You carry three weapons: any two long guns (slots 1 and 2 — mix and match
 freely, even two of the same) plus a sidearm:
 
-| Slot | Weapon | Dmg × pellets | RPM | Mag | Role |
-|---|---|---|---|---|---|
-| 1·2 | UMP45 | 21 × 1 | 600 | 40 | steady SMG, low recoil |
-| 1·2 | MP5 | 18 × 1 | 600 | 40 | laser-stable, lighter hits |
-| 1·2 | MAC-10 | 17 × 1 | 1200 | 30 | double-rate sneeze, wild kick |
-| 1·2 | M4A1 | 27 × 1 | 540 | 30 | all-rounder — recoil builds as you spray |
-| 1·2 | AK-47 | 32 × 1 | 430 | 30 | harder-hitting, slower, kickier than the M4A1 |
-| 1·2 | Mutant MK47 | 34 × 1 | burst | 30 | 3-round bursts; click up to 300 bpm — hammer faster and it jams for 0.6 s |
-| 1·2 | M249 | 27 × 1 | 460 | 100 | belt-fed, slow and relentless — pierces bodies and chews terrain |
-| 1·2 | M870 | 34 × 6 | 80 | 6 | tight cone, 700-unit reach — three pellets kill |
-| 1·2 | M24 bolt | 100 × 1 | 30 | 5 | one shot, one kill |
-| 1·2 | SLR | 60 × 1 | 120 | 10 | measured, heavy follow-up shots at range |
-| 3 | M9 | 26 × 1 | 300 | 12 | accurate mobile fallback |
-| 3 | Pan | 100 swing | 80 | ∞ | lethal up close; shields your frontal torso while drawn, and your lower back while stowed |
+| Slot | Weapon      | Dmg × pellets | RPM   | Mag | Role                                                                                      |
+| ---- | ----------- | ------------- | ----- | --- | ----------------------------------------------------------------------------------------- |
+| 1·2  | UMP45       | 21 × 1        | 600   | 40  | steady SMG, low recoil                                                                    |
+| 1·2  | MP5         | 18 × 1        | 600   | 40  | laser-stable, lighter hits                                                                |
+| 1·2  | MAC-10      | 17 × 1        | 1200  | 30  | double-rate sneeze, wild kick                                                             |
+| 1·2  | M4A1        | 27 × 1        | 540   | 30  | all-rounder — recoil builds as you spray                                                  |
+| 1·2  | AK-47       | 32 × 1        | 430   | 30  | harder-hitting, slower, kickier than the M4A1                                             |
+| 1·2  | Mutant MK47 | 34 × 1        | burst | 30  | 3-round bursts; click up to 300 bpm — hammer faster and it jams for 0.6 s                 |
+| 1·2  | M249        | 27 × 1        | 460   | 100 | belt-fed, slow and relentless — pierces bodies and chews terrain                          |
+| 1·2  | M870        | 34 × 6        | 80    | 6   | tight cone, 700-unit reach — three pellets kill                                           |
+| 1·2  | M24 bolt    | 100 × 1       | 30    | 5   | one shot, one kill                                                                        |
+| 1·2  | SLR         | 60 × 1        | 120   | 10  | measured, heavy follow-up shots at range                                                  |
+| 3    | M9          | 26 × 1        | 300   | 12  | accurate mobile fallback                                                                  |
+| 3    | Pan         | 100 swing     | 80    | ∞   | lethal up close; shields your frontal torso while drawn, and your lower back while stowed |
 
 SMG rounds shed energy over distance — down to a quarter of listed damage by
 the edge of the screen; shotgun pellets drop to half by the end of their
@@ -145,7 +167,7 @@ projectiles: they have muzzle velocity and drop under gravity, so lead your
 targets and lob at long range. Keys are rebindable via CONTROLS on the join
 screen. The server keeps at least 8 combatants in the arena — bots deploy under
 famous outlaw aliases with a (B) tag and rotate out as humans join. Bots patrol the arena
-edge-to-edge on real flight paths (A*), stopping to fight whoever crosses
+edge-to-edge on real flight paths (A\*), stopping to fight whoever crosses
 their route, and they see the same 16:9 window players do. They fight fair:
 they never aim for the head, don't fire through walls, and hold fire
 entirely while flashbanged. Their difficulty tracks the humans' average K/D each round —
@@ -164,13 +186,13 @@ intermission showing the final scoreboard.
 
 ## Environment knobs
 
-| Variable | Effect |
-|---|---|
-| `PORT` | server port (default 8090; dev client expects 8090) |
-| `ROUND_SECS` | shorten rounds for testing |
-| `NOBOTS=1` | disable bot autofill |
-| `ALLOW_LAG_SIM=1` | honor the `?lag=N` fake-latency URL param |
-| `DISABLE_LAGCOMP=1` | disable hit rewind (netcode verification) |
+| Variable            | Effect                                              |
+| ------------------- | --------------------------------------------------- |
+| `PORT`              | server port (default 8090; dev client expects 8090) |
+| `ROUND_SECS`        | shorten rounds for testing                          |
+| `NOBOTS=1`          | disable bot autofill                                |
+| `ALLOW_LAG_SIM=1`   | honor the `?lag=N` fake-latency URL param           |
+| `DISABLE_LAGCOMP=1` | disable hit rewind (netcode verification)           |
 
 ## Netcode
 
@@ -184,7 +206,7 @@ on both sides:
 - **Entity interpolation** — remote players are rendered ~100 ms in the past,
   smoothly interpolated between snapshots.
 - **Lag compensation (rewind)** — the server keeps ~1 s of position history.
-  Every shot carries the tick the shooter was actually *seeing*, and hits are
+  Every shot carries the tick the shooter was actually _seeing_, and hits are
   resolved against the rewound world, capped at **1 second**. High-latency
   players hit what they aim at; the accepted tradeoff is that a victim can
   occasionally be tagged right after reaching cover behind a floating boulder.
