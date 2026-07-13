@@ -43,12 +43,12 @@ export class Effects {
         x: cx, y: cy,
         vx: Math.cos(a) * w.speed,
         vy: Math.sin(a) * w.speed,
-        // the bolt round flies as a long thin bright-white streak
-        color: weapon === 'sniper' ? [1, 1, 1] : w.color,
+        // marksman rounds fly as thin bright-white streaks (SLR: half length)
+        color: weapon === 'sniper' || weapon === 'dmr' ? [1, 1, 1] : w.color,
         life: Math.min(weapon === 'mk47' ? 0.4 : Infinity, (w.range ?? MAX_RANGE) / w.speed),
-        maxLen: weapon === 'sniper' ? 100 : 30,
-        scale: weapon === 'sniper' ? 1.2 : 1,
-        bright: weapon === 'sniper',
+        maxLen: weapon === 'sniper' ? 100 : weapon === 'dmr' ? 50 : 30,
+        scale: weapon === 'sniper' ? 1.2 : weapon === 'dmr' ? 1.1 : 1,
+        bright: weapon === 'sniper' || weapon === 'dmr',
       });
     }
     const color = w.color;
