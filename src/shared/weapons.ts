@@ -83,7 +83,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   sniper: {
     name: 'M24 BOLT', role: 'one shot, one kill — 2 s between rounds',
     damage: 100, pellets: 1, rpm: 30, spreadDeg: 0.1,
-    speed: 62400, range: 2222, heatPerShot: 0, heatMax: 0, heatDecay: 8,
+    speed: 62400, range: 2550, heatPerShot: 0, heatMax: 0, heatDecay: 8,
     mag: 5, reloadSec: 1.75, moveMult: 0.8,
     color: [1.0, 0.25, 0.2],
     muzzleLen: 56,

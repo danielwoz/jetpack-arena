@@ -244,7 +244,7 @@ const PIERCING = new Set<PlayerState['weapon']>(['rifle', 'ak47', 'mk47', 'dmr',
 const CHANNEL: Partial<Record<PlayerState['weapon'], { r: number; len: number }>> = {
   rifle: { r: 5, len: 34 }, ak47: { r: 5, len: 34 }, mk47: { r: 5, len: 34 },
   m249: { r: 8, len: 34 },
-  dmr: { r: 3.5, len: 68 }, sniper: { r: 3.5, len: 102 },
+  dmr: { r: 3.5, len: 68 }, sniper: { r: 3.5, len: 204 },
 };
 // rounds only chip terrain up close — past 75% of a screen width the hit
 // still lands (and still stops the bullet), it just leaves no channel
