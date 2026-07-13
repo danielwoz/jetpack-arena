@@ -46,7 +46,7 @@ export class Effects {
         // the bolt round flies as a long thin bright-white streak
         color: weapon === 'sniper' ? [1, 1, 1] : w.color,
         life: Math.min(weapon === 'mk47' ? 0.4 : Infinity, (w.range ?? MAX_RANGE) / w.speed),
-        maxLen: weapon === 'sniper' ? 220 : 30,
+        maxLen: weapon === 'sniper' ? 100 : 30,
         scale: weapon === 'sniper' ? 1.2 : 1,
         bright: weapon === 'sniper',
       });
@@ -242,7 +242,7 @@ export class Effects {
           this.spawnHitSpark(b.x, b.y);
           dead = true;
         } else {
-          if (b.bright) this.beams.push({ x1: b.x, y1: b.y, x2: nx, y2: ny, age: 0, ttl: 0.3 });
+          if (b.bright) this.beams.push({ x1: b.x, y1: b.y, x2: nx, y2: ny, age: 0, ttl: 0.15 });
           b.x = nx;
           b.y = ny;
         }

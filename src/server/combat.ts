@@ -250,6 +250,10 @@ const CHANNEL: Partial<Record<PlayerState['weapon'], { r: number; len: number }>
 // still lands (and still stops the bullet), it just leaves no channel
 const ENV_DMG_RANGE = VIEW_H * (16 / 9) * 0.75;
 
+// the bolt round is a 100-unit-long projectile, not a point: anything its
+// body overlaps during a tick counts, which forgives near-miss timing
+const SNIPER_BODY = 100;
+
 export function stepBullets(world: CombatWorld, bullets: Bullet[]): void {
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
@@ -272,10 +276,14 @@ export function stepBullets(world: CombatWorld, bullets: Bullet[]): void {
       if (b.hit.includes(v.id)) continue;
       const pos = world.lagcomp.sample(v.id, sampleTick);
       if (!pos) continue;
-      const t = rayVsRect(b.x, b.y, dirX, dirY, {
+      // the trailing body starts behind the tip (never before the muzzle)
+      const back = b.weapon === 'sniper' && b.dist > 0 ? SNIPER_BODY : 0;
+      const t0 = rayVsRect(b.x - dirX * back, b.y - dirY * back, dirX, dirY, {
         x: pos.x - PLAYER_HW, y: pos.y - PLAYER_HH, w: PLAYER_W, h: PLAYER_H,
       });
-      if (t === null || t > segLen || t >= wallT) continue;
+      if (t0 === null) continue;
+      const t = t0 - back;
+      if (t > segLen || t >= wallT) continue;
       if (pierce) {
         crossed.push({ v, t });
       } else if (t < bestT) {
