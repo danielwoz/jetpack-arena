@@ -97,7 +97,7 @@ const BOT_NAMES = [
 function idleCmd(): InputCmd {
   return {
     seq: 0, mx: 0, up: false, dn: false, jump: false, sprint: false, slot: 0,
-    aim: 0, fire: false, reload: false, heal: false, nade: false, rt: 0,
+    aim: 0, fire: false, reload: false, heal: false, nade: false, zoom: false, rt: 0,
   };
 }
 
@@ -134,7 +134,7 @@ function sanitizeCmd(c: InputCmd): InputCmd {
   return {
     seq: c.seq, mx: c.mx, up: c.up, dn: c.dn, jump: c.jump, sprint: c.sprint,
     slot: c.slot, aim: c.aim, fire: c.fire, reload: c.reload, heal: c.heal,
-    nade: c.nade, rt: c.rt,
+    nade: c.nade, zoom: c.zoom === true, rt: c.rt,
   };
 }
 
@@ -367,7 +367,7 @@ export class GameRoom {
           }
         }
         const res = stepPlayer(p.state, cmd, SOLIDS, this.world);
-        if (res.fired) fireBullets(this, p, cmd.rt, this.bullets);
+        if (res.fired) fireBullets(this, p, cmd.rt, this.bullets, cmd.zoom);
         if (res.threw) this.throwNade(p, NADES[p.state.nadeType].fuse - res.primeTicks);
         if (res.handBoom) this.detonate(p.state.x, p.state.y, p, p.state.nadeType);
         if (res.fellDmg > 0) {
@@ -813,6 +813,7 @@ export class GameRoom {
       reload: false,
       heal: false,     // bots never bandage
       nade: b.nadeHold > 0,
+      zoom: false,
       rt: this.tick,
     };
   }

@@ -129,6 +129,7 @@ export interface Bullet {
 // spread, and tell every client the true angles for cosmetic tracers.
 export function fireBullets(
   world: CombatWorld, shooter: CombatPlayer, rt: number, bullets: Bullet[],
+  zoomed = false,
 ): void {
   const st = shooter.state;
   const w = WEAPONS[st.weapon];
@@ -140,6 +141,8 @@ export function fireBullets(
     ? 0
     : clamp(world.tick - rt, 0, LAGCOMP_MAX_TICKS);
   const spread = spreadRad(st.weapon, st.onGround ? 0 : st.heat);
+  // marksman zoom-out doubles reach so bullets fly as far as the eye sees
+  const rangeMult = zoomed && (st.weapon === 'dmr' || st.weapon === 'sniper') ? 2 : 1;
 
   const angles: number[] = [];
   for (let i = 0; i < w.pellets; i++) {
@@ -150,7 +153,7 @@ export function fireBullets(
       vx: Math.cos(a) * w.speed,
       vy: Math.sin(a) * w.speed,
       weapon: st.weapon, owner: shooter.id, rewindOff,
-      life: (w.range ?? MAX_RANGE) / w.speed, dist: 0, hit: [], spent: false,
+      life: ((w.range ?? MAX_RANGE) * rangeMult) / w.speed, dist: 0, hit: [], spent: false,
     });
   }
   world.events.push({

@@ -302,13 +302,14 @@ function makeJungle(seed: number, spanHalf: number, minH: number, maxH: number, 
       cell: Math.floor(r() * 64),
       h: minH + r() * (maxH - minH),
       // deep enough that the base is never visible, even from the floor
-      base: WORLD_H + 700 + r() * 320,
+      // with the marksman zoom-out at its full 2x pull-back
+      base: WORLD_H + 1200 + r() * 320,
     });
     x += gap * (0.55 + r() * 0.8);
   }
   return out;
 }
-const JUNGLE_FAR = makeJungle(11, 5200, 1900, 2800, 1050);
+const JUNGLE_FAR = makeJungle(11, 5200, 2300, 3200, 1050);
 
 // the hill silhouette the pandora map's collision steps approximate
 function hillTopCurve(x: number): number {

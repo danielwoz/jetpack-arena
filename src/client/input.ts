@@ -102,6 +102,7 @@ export class Input {
       reload: this.reloadQueued,
       heal: this.healQueued,
       nade: this.has('nade'),
+      zoom: this.zoomHeld,
       rt,
     };
     this.reloadQueued = false;

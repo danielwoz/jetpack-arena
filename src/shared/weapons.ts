@@ -83,7 +83,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   sniper: {
     name: 'M24 BOLT', role: 'one shot, one kill — 2 s between rounds',
     damage: 100, pellets: 1, rpm: 30, spreadDeg: 0.1,
-    speed: 31200, heatPerShot: 0, heatMax: 0, heatDecay: 8,
+    speed: 62400, range: 2222, heatPerShot: 0, heatMax: 0, heatDecay: 8,
     mag: 5, reloadSec: 1.75, moveMult: 0.8,
     color: [1.0, 0.25, 0.2],
     muzzleLen: 56,
@@ -91,7 +91,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   dmr: {
     name: 'SLR', role: 'measured, heavy follow-up shots at range',
     damage: 60, pellets: 1, rpm: 120, spreadDeg: 0.35,
-    speed: 9200, heatPerShot: 0, heatMax: 0, heatDecay: 8,
+    speed: 18400, range: 2222, heatPerShot: 0, heatMax: 0, heatDecay: 8,
     mag: 10, reloadSec: 1.3, moveMult: 0.85,
     color: [0.8, 0.9, 1.0],
     muzzleLen: 55,
