@@ -9,8 +9,67 @@
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>"
     />
     <link rel="stylesheet" href="/src/client/style.css" />
+    <style>
+      #boot { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center;
+        justify-content: center; background: #05060d; transition: opacity 0.35s; font-family: system-ui, sans-serif; }
+      #boot .bootbox { width: min(420px, 80vw); text-align: center; }
+      #boot h1 { color: #9fc2ff; letter-spacing: 0.25em; font-size: 22px; margin: 0 0 18px; }
+      #bootbar { height: 6px; background: #141b2e; border-radius: 3px; overflow: hidden; }
+      #bootfill { height: 100%; width: 3%; background: linear-gradient(90deg, #2f80c9, #4dd7ff);
+        border-radius: 3px; transition: width 0.25s; }
+      #bootmsg { color: #5c6f96; font-size: 12px; letter-spacing: 0.12em; margin-top: 12px; min-height: 16px; }
+      #bootretry { display: none; margin-top: 14px; padding: 8px 26px; background: #1a2440; color: #9fc2ff;
+        border: 1px solid #2f4370; border-radius: 4px; letter-spacing: 0.2em; cursor: pointer; }
+    </style>
   </head>
   <body>
+    <div id="boot">
+      <div class="bootbox">
+        <h1>JETPACK ARENA</h1>
+        <div id="bootbar"><div id="bootfill"></div></div>
+        <div id="bootmsg">contacting server&hellip;</div>
+        <button id="bootretry">RETRY</button>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var fill = document.getElementById('bootfill');
+        var msg = document.getElementById('bootmsg');
+        var retry = document.getElementById('bootretry');
+        var failed = false;
+        var wd = 0;
+        function arm() {
+          clearTimeout(wd);
+          wd = setTimeout(function () {
+            window.BOOT.fail('connection timed out');
+          }, 12000);
+        }
+        retry.addEventListener('click', function () { location.reload(); });
+        window.BOOT = {
+          set: function (f, label) {
+            if (failed) return;
+            fill.style.width = Math.max(3, Math.round(f * 100)) + '%';
+            if (label) msg.textContent = label;
+            arm();
+          },
+          done: function () {
+            clearTimeout(wd);
+            var b = document.getElementById('boot');
+            if (!b) return;
+            b.style.opacity = '0';
+            b.style.pointerEvents = 'none';
+            setTimeout(function () { b.remove(); }, 400);
+          },
+          fail: function (m) {
+            failed = true;
+            clearTimeout(wd);
+            msg.textContent = m + ' \u2014 tap retry';
+            retry.style.display = 'inline-block';
+          },
+        };
+        arm();
+      })();
+    </script>
     <div id="stage">
       <canvas id="gl"></canvas>
       <canvas id="overlay"></canvas>

@@ -3,6 +3,7 @@ import { lerp } from '../shared/math.ts';
 import { NADES, WEAPONS, reloadTicks, spreadRad } from '../shared/weapons.ts';
 import type { PlayerState, Snapshot } from '../shared/types.ts';
 import { audio } from './audio.ts';
+import { CAMO_COUNT } from './render/soldier.ts';
 import { Camera } from './camera.ts';
 import { Effects } from './effects.ts';
 import { Hud } from './hud.ts';
@@ -34,8 +35,47 @@ const lensCam = new Camera();
 
 input.attach();
 ui.onCaptureChange = (capturing) => { input.capturing = capturing; };
-// bake textures after first paint so the join screen appears instantly
-setTimeout(() => ensureTextures(renderer), 30);
+
+// ---- boot loader: the inline overlay in index.html renders instantly;
+// we drive its progress bar while warming the HTTP cache for every big
+// asset, so texture upgrades later are instant and a flaky connection
+// gets visible retries instead of a browser timeout page.
+interface Boot { set(f: number, label?: string): void; done(): void; fail(m: string): void }
+const BOOT = (window as unknown as { BOOT?: Boot }).BOOT;
+
+const PRELOAD = [
+  '/tex/rock.webp', '/tex/metal.webp', '/tex/concrete.webp', '/tex/nebula.webp',
+  '/tex/planet.webp', '/tex/guns.webp', '/tex/facades.webp', '/tex/facades.json',
+  '/tex/pd_sky.webp', '/tex/pd_grass.webp', '/tex/pd_flora.webp', '/tex/pd_meta.json',
+  ...Array.from({ length: CAMO_COUNT + 1 }, (_, i) => `/tex/body_${i - 1}.webp`),
+];
+
+async function preloadAssets(): Promise<void> {
+  BOOT?.set(0.06, 'loading assets…');
+  let loaded = 0;
+  const step = (): void => {
+    loaded++;
+    BOOT?.set(0.06 + 0.94 * (loaded / PRELOAD.length), `loading assets ${loaded}/${PRELOAD.length}`);
+  };
+  await Promise.all(PRELOAD.map(async (url) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(String(res.status));
+        await res.arrayBuffer();
+        break;
+      } catch {
+        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+      }
+    }
+    step();   // a stubborn asset falls back to the lazy in-game upgrade path
+  }));
+  BOOT?.done();
+}
+
+// bake procedural textures after first paint; AI upgrades then read
+// straight from the warmed HTTP cache
+void preloadAssets().then(() => ensureTextures(renderer));
 
 // /?cells — every sprite cell as a data URL, for the AI re-texture pipeline
 const GL_STATS = new URLSearchParams(location.search).has('glstats');
