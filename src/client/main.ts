@@ -35,20 +35,35 @@ const predictor = new Predictor();
 const lensCam = new Camera();
 
 input.attach();
-ui.onCaptureChange = (capturing) => { input.capturing = capturing; };
+ui.onCaptureChange = (capturing) => {
+  input.capturing = capturing;
+};
 
 // ---- boot loader: the inline overlay in index.html renders instantly;
 // we drive its progress bar while warming the HTTP cache for every big
 // asset, so texture upgrades later are instant and a flaky connection
 // gets visible retries instead of a browser timeout page.
-interface Boot { set(f: number, label?: string): void; done(): void; fail(m: string): void }
+interface Boot {
+  set(f: number, label?: string): void;
+  done(): void;
+  fail(m: string): void;
+}
 const BOOT = (window as unknown as { BOOT?: Boot }).BOOT;
 
 const PRELOAD = [
-  '/tex/rock.webp', '/tex/metal.webp', '/tex/concrete.webp', '/tex/nebula.webp',
-  '/tex/planet.webp', '/tex/guns.webp', '/tex/facades.webp', '/tex/facades.json',
-  '/tex/pd_sky.webp', '/tex/pd_grass.webp', '/tex/pd_flora.webp', '/tex/pd_meta.json',
-  ...Array.from({ length: CAMO_COUNT + 1 }, (_, i) => `/tex/body_${i - 1}.webp`),
+  '/tex/rock.webp',
+  '/tex/metal.webp',
+  '/tex/concrete.webp',
+  '/tex/nebula.webp',
+  '/tex/planet.webp',
+  '/tex/guns.webp',
+  '/tex/facades.webp',
+  '/tex/facades.json',
+  '/tex/pd_sky.webp',
+  '/tex/pd_grass.webp',
+  '/tex/pd_flora.webp',
+  '/tex/pd_meta.json',
+  ...Array.from({ length: CAMO_COUNT + 1 }, (_, i) => `/tex/body_${i - 1}.webp`)
 ];
 
 async function preloadAssets(): Promise<void> {
@@ -58,19 +73,21 @@ async function preloadAssets(): Promise<void> {
     loaded++;
     BOOT?.set(0.06 + 0.94 * (loaded / PRELOAD.length), `loading assets ${loaded}/${PRELOAD.length}`);
   };
-  await Promise.all(PRELOAD.map(async (url) => {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(String(res.status));
-        await res.arrayBuffer();
-        break;
-      } catch {
-        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+  await Promise.all(
+    PRELOAD.map(async (url) => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(String(res.status));
+          await res.arrayBuffer();
+          break;
+        } catch {
+          await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+        }
       }
-    }
-    step();   // a stubborn asset falls back to the lazy in-game upgrade path
-  }));
+      step(); // a stubborn asset falls back to the lazy in-game upgrade path
+    })
+  );
   BOOT?.done();
 }
 
@@ -131,9 +148,8 @@ if (new URLSearchParams(location.search).has('camo')) {
     grid.style.cssText =
       'position:fixed;top:0;left:0;z-index:99;background:#445;display:flex;flex-wrap:wrap;max-width:100%;overflow:auto;height:100%;';
     for (let i = -3; i < CAMO_COUNT; i++) {
-      const v = i === -3 ? buildBodyVariant(0, { gold: true, silver: true })
-        : buildBodyVariant(Math.max(-1, i), { floral: i === -1 });
-      void (i === -2 && v);   // -2 = plain pink, -1 = pink+floral
+      const v = i === -3 ? buildBodyVariant(0, { gold: true, silver: true }) : buildBodyVariant(Math.max(-1, i), { floral: i === -1 });
+      void (i === -2 && v); // -2 = plain pink, -1 = pink+floral
       const cut = document.createElement('canvas');
       cut.width = 440;
       cut.height = 352;
@@ -149,8 +165,7 @@ if (new URLSearchParams(location.search).has('camo')) {
 if (new URLSearchParams(location.search).has('atlas')) {
   import('./render/soldier.ts').then(({ buildSoldierAtlas }) => {
     const a = buildSoldierAtlas();
-    a.canvas.style.cssText =
-      'position:fixed;top:0;left:0;z-index:99;background:#556;max-width:100%;';
+    a.canvas.style.cssText = 'position:fixed;top:0;left:0;z-index:99;background:#556;max-width:100%;';
     document.body.appendChild(a.canvas);
   });
 }
@@ -161,9 +176,9 @@ let shakeAmp = 0;
 let deathCamT = 0;
 let corpse: { x: number; y: number; vx: number; vy: number } | null = null;
 let pendingKiller: string | null = null;
-let spawnFade = 0;       // 1 → 0 over 2 s after spawning
-let camZoom = 1;         // eased toward 2 while the marksman zoom is held
-let leadCurX = 0;        // cursor lead, smoothed slower than the camera
+let spawnFade = 0; // 1 → 0 over 2 s after spawning
+let camZoom = 1; // eased toward 2 while the marksman zoom is held
+let leadCurX = 0; // cursor lead, smoothed slower than the camera
 let leadCurY = 0;
 let spawnSeen = false;
 let started = false;
@@ -172,13 +187,15 @@ let lastKillerName: string | null = null;
 let remotes: RenderPlayer[] = [];
 
 ui.onJoin = (name, loadout, nadeType) => {
-  Net.connect(name, loadout, nadeType).then((n) => {
-    net = n;
-    net.onClose = () => ui.showDisconnected();
-    net.onSnap = onSnapshot;
-  }).catch((err: Error) => {
-    ui.joinFailed(err.message);
-  });
+  Net.connect(name, loadout, nadeType)
+    .then((n) => {
+      net = n;
+      net.onClose = () => ui.showDisconnected();
+      net.onSnap = onSnapshot;
+    })
+    .catch((err: Error) => {
+      ui.joinFailed(err.message);
+    });
 };
 
 ui.onRespawn = (loadout, nadeType) => {
@@ -188,7 +205,7 @@ ui.onRespawn = (loadout, nadeType) => {
 function onSnapshot(snap: Snapshot): void {
   if (!net) return;
   interp.add(snap);
-  handleEvents(snap);   // before death handling so the killer's name is known
+  handleEvents(snap); // before death handling so the killer's name is known
 
   const self = snap.players.find((p) => p.id === net!.myId);
   if (self) {
@@ -211,8 +228,7 @@ function onSnapshot(snap: Snapshot): void {
       corpse = { x: st2?.x ?? self.x, y: st2?.y ?? self.y, vx: st2?.vx ?? 0, vy: -220 };
       deathCamT = 2;
       pendingKiller = lastKillerName;
-      hud.deathBanner(lastKillerName
-        ? `ELIMINATED BY ${lastKillerName.toUpperCase()}` : 'YOU DIED');
+      hud.deathBanner(lastKillerName ? `ELIMINATED BY ${lastKillerName.toUpperCase()}` : 'YOU DIED');
     } else if (!wasAlive && self.alive) {
       ui.hideDeath();
       camera.snapTo(self.x, self.y);
@@ -229,29 +245,30 @@ function handleEvents(snap: Snapshot): void {
         if (ev.id !== net.myId) {
           const aim = ev.angles[0] ?? 0;
           const ml = WEAPONS[ev.weapon].muzzleLen;
-          effects.spawnShot(
-            ev.ox, ev.oy,
-            ev.ox + Math.cos(aim) * ml, ev.oy + Math.sin(aim) * ml,
-            ev.angles, ev.weapon, aim,
-          );
+          effects.spawnShot(ev.ox, ev.oy, ev.ox + Math.cos(aim) * ml, ev.oy + Math.sin(aim) * ml, ev.angles, ev.weapon, aim);
           const me = predictor.state;
           if (me) audio.shot(ev.weapon, ev.ox - me.x, Math.hypot(ev.ox - me.x, ev.oy - me.y));
         }
         break;
-      case 'hit': {
-        overlay.addDamage(ev.x, ev.y, ev.dmg, ev.attacker === net.myId);
-        effects.spawnHitSpark(ev.x, ev.y);
-        const me = predictor.state;
-        if (me) audio.hitThud(ev.x - me.x, Math.hypot(ev.x - me.x, ev.y - me.y));
-      }
+      case 'hit':
+        {
+          overlay.addDamage(ev.x, ev.y, ev.dmg, ev.attacker === net.myId);
+          effects.spawnHitSpark(ev.x, ev.y);
+          const me = predictor.state;
+          if (me) audio.hitThud(ev.x - me.x, Math.hypot(ev.x - me.x, ev.y - me.y));
+        }
         if (ev.victim === net.myId) hud.flashDamage();
         break;
       case 'kill': {
-        const wname = ev.weapon === 'grenade' ? 'GRENADE'
-          : ev.weapon === 'fall' ? 'BAD DECISIONS'
-          : ev.weapon === 'fire' ? 'NAPALM' : WEAPONS[ev.weapon].name;
-        const killer = ev.assists.length > 0
-          ? `${ev.killerName} +${ev.assists.join(' +')}` : ev.killerName;
+        const wname =
+          ev.weapon === 'grenade'
+            ? 'GRENADE'
+            : ev.weapon === 'fall'
+              ? 'BAD DECISIONS'
+              : ev.weapon === 'fire'
+                ? 'NAPALM'
+                : WEAPONS[ev.weapon].name;
+        const killer = ev.assists.length > 0 ? `${ev.killerName} +${ev.assists.join(' +')}` : ev.killerName;
         hud.addKill(killer, ev.victimName, wname);
         effects.spawnDeathBurst(ev.x, ev.y, playerColor(ev.victim));
         if (ev.victim === net.myId) lastKillerName = ev.killerName;
@@ -278,11 +295,11 @@ function handleEvents(snap: Snapshot): void {
         const st = predictor.state;
         if (st && st.alive) {
           const d = Math.hypot(st.x - ev.x, st.y - ev.y);
-          const self = ev.owner === net.myId ? 0.5 : 1;   // your own bang stings less
+          const self = ev.owner === net.myId ? 0.5 : 1; // your own bang stings less
           const away = Math.cos(st.aim) * (ev.x - st.x) < 0 ? 0.5 : 1;
           if (d < FLASH_RADIUS) hud.flashBlind(FLASH_BLIND_SECS * (1 - d / FLASH_RADIUS) * self * away);
         }
-        effects.spawnClank(ev.x, ev.y);   // bright pop for everyone
+        effects.spawnClank(ev.x, ev.y); // bright pop for everyone
         break;
       }
       case 'swing':
@@ -320,22 +337,17 @@ function localShotEffect(st: PlayerState): void {
   for (let i = 0; i < w.pellets; i++) {
     angles.push(st.aim + (Math.random() * 2 - 1) * spread);
   }
-  effects.spawnShot(
-    st.x, st.y,
-    st.x + Math.cos(st.aim) * w.muzzleLen, st.y + Math.sin(st.aim) * w.muzzleLen,
-    angles, st.weapon, st.aim,
-  );
+  effects.spawnShot(st.x, st.y, st.x + Math.cos(st.aim) * w.muzzleLen, st.y + Math.sin(st.aim) * w.muzzleLen, angles, st.weapon, st.aim);
 }
 
 function fixedStep(): void {
   const st = predictor.state;
   if (!net || !st) return;
-  if ((interp.latest()?.inter ?? 0) > 0) return;   // round intermission: frozen
+  if ((interp.latest()?.inter ?? 0) > 0) return; // round intermission: frozen
+  input.menuOpen = ui.isMenuOpen;
   const cw = glCanvas.clientWidth;
   const ch = glCanvas.clientHeight;
-  const cmd = input.buildCmd(
-    seq++, Math.max(0, net.renderTick()), st.x, st.y, camera, cw, ch,
-  );
+  const cmd = input.buildCmd(seq++, Math.max(0, net.renderTick()), st.x, st.y, st.slotIdx, camera, cw, ch);
   const res = predictor.apply(cmd);
   net.sendInput(cmd);
   if (res.fired) {
@@ -369,7 +381,7 @@ function fixedStep(): void {
     if (!st) return null;
     return camera.worldToScreen(st.x, st.y, glCanvas.clientWidth, glCanvas.clientHeight);
   },
-  holes: () => world.holes,
+  holes: () => world.holes
 };
 
 let last = -1;
@@ -435,7 +447,7 @@ function render(dtSec: number, alpha: number): void {
       corpse.x = nx;
       corpse.y = ny;
     } else {
-      corpse.vx *= 0.6;   // settled on the ground
+      corpse.vx *= 0.6; // settled on the ground
       corpse.vy = 0;
     }
     camera.follow(corpse.x, corpse.y, dtSec);
@@ -519,19 +531,30 @@ function render(dtSec: number, alpha: number): void {
     }
   }
 
-  const selfRP: RenderPlayer | null = st.alive ? {
-    id: net.myId, name: netSelf?.name ?? '', x: rx, y: ry, aim: st.aim,
-    alive: true, weapon: st.weapon, hp: st.hp,
-    prot: netSelf?.prot ?? false,
-    jetU: st.jetU, jetD: st.jetD,
-    priming: st.prime > 0, healing: st.bandage > 0,
-    bandageT: st.bandage > 0 ? 1 - st.bandage / 60 : 0,
-    reloadT: st.reload > 0 ? 1 - st.reload / reloadTicks(st.weapon) : 0,
-    primeT: st.prime > 0 ? st.prime / NADES[st.nadeType].fuse : 0,
-    burning: netSelf?.burn ?? false,
-    dizzy: netSelf?.dizzy ?? false,
-    vx: st.vx, onGround: st.onGround,
-  } : null;
+  const selfRP: RenderPlayer | null = st.alive
+    ? {
+        id: net.myId,
+        name: netSelf?.name ?? '',
+        x: rx,
+        y: ry,
+        aim: st.aim,
+        alive: true,
+        weapon: st.weapon,
+        hp: st.hp,
+        prot: netSelf?.prot ?? false,
+        jetU: st.jetU,
+        jetD: st.jetD,
+        priming: st.prime > 0,
+        healing: st.bandage > 0,
+        bandageT: st.bandage > 0 ? 1 - st.bandage / 60 : 0,
+        reloadT: st.reload > 0 ? 1 - st.reload / reloadTicks(st.weapon) : 0,
+        primeT: st.prime > 0 ? st.prime / NADES[st.nadeType].fuse : 0,
+        burning: netSelf?.burn ?? false,
+        dizzy: netSelf?.dizzy ?? false,
+        vx: st.vx,
+        onGround: st.onGround
+      }
+    : null;
 
   const nades = interp.sampleNades(renderTick);
   drawScene(renderer, camera, remotes, selfRP, nades, fires, effects, dtSec, spawnFade);
@@ -565,9 +588,13 @@ function render(dtSec: number, alpha: number): void {
       const t0 = (i / 48) * Math.PI * 2;
       const t1 = ((i + 1) / 48) * Math.PI * 2;
       renderer.line(
-        cx + Math.cos(t0) * (R - 2), cy + Math.sin(t0) * (R - 2),
-        cx + Math.cos(t1) * (R - 2), cy + Math.sin(t1) * (R - 2),
-        3 * scale, [0.3, 0.85, 1.0], 0.8,
+        cx + Math.cos(t0) * (R - 2),
+        cy + Math.sin(t0) * (R - 2),
+        cx + Math.cos(t1) * (R - 2),
+        cy + Math.sin(t1) * (R - 2),
+        3 * scale,
+        [0.3, 0.85, 1.0],
+        0.8
       );
     }
     renderer.flush();

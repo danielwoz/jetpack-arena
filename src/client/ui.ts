@@ -3,6 +3,7 @@ import { NADES, SLOT_OPTIONS, WEAPONS, DEFAULT_LOADOUT } from '../shared/weapons
 import type { Loadout, NadeType, WeaponId } from '../shared/types.ts';
 import { ACTIONS, ACTION_LABELS, bindings } from './bindings.ts';
 import { audio } from './audio.ts';
+import { gamepad } from './gamepad.ts';
 import { getRenderScale, setRenderScale } from './render/gl.ts';
 import { TUNE, WEAPON_TUNABLE } from '../shared/tuning.ts';
 
@@ -272,6 +273,16 @@ export class Ui {
   private capturingBindKey = false;
   private respawnReadyAt = 0;
   private countdownTimer = 0;
+  private padPrevPressed = new Set<string>();
+  private padMoveRepeatAt = 0;
+  private padDeployFocus = false;
+  private padSliderContext = '';
+  private padSliderIndex = 0;
+  private padLoop = 0;
+  private padSettingsBtnIndex = -1;
+  private padBindrowContext = '';
+  private padBindrowIndex = -1;
+  private padControlsBtnIndex = -1;
 
   onJoin: (name: string, loadout: Loadout, nadeType: NadeType) => void = () => {};
   onRespawn: (loadout: Loadout, nadeType: NadeType) => void = () => {};
@@ -279,18 +290,40 @@ export class Ui {
 
   private buildBindList(list: HTMLDivElement): void {
     list.innerHTML = '';
+
+    // Column headers
+    const header = document.createElement('div');
+    header.className = 'bindrow bindrow-header';
+    const hEmpty = document.createElement('span');
+    const hKb = document.createElement('span');
+    hKb.textContent = 'KEYBOARD';
+    const hPad = document.createElement('span');
+    hPad.textContent = 'CONTROLLER';
+    header.append(hEmpty, hKb, hPad);
+    list.appendChild(header);
+
     for (const action of ACTIONS) {
       const row = document.createElement('div');
       row.className = 'bindrow';
+      row.dataset.action = action;
+
       const label = document.createElement('span');
       label.className = 'blabel';
       label.textContent = ACTION_LABELS[action];
-      const btn = document.createElement('button');
-      btn.className = 'keybtn';
-      btn.textContent = bindings.label(action);
-      btn.addEventListener('click', () => {
-        btn.textContent = 'PRESS A KEY…';
-        btn.classList.add('listening');
+
+      const kbSpan = document.createElement('span');
+      kbSpan.className = 'bkb';
+      kbSpan.textContent = bindings.label(action);
+
+      const padSpan = document.createElement('span');
+      padSpan.className = 'bpad';
+      padSpan.textContent = bindings.padLabel(action);
+
+      // Clicking the row captures a keyboard key for this action.
+      row.addEventListener('click', () => {
+        if (this.capturingBindKey) return;
+        kbSpan.textContent = 'PRESS A KEY…';
+        kbSpan.classList.add('listening');
         this.capturingBindKey = true;
         this.onCaptureChange(true);
         const capture = (e: KeyboardEvent): void => {
@@ -304,7 +337,8 @@ export class Ui {
         };
         window.addEventListener('keydown', capture, true);
       });
-      row.append(label, btn);
+
+      row.append(label, kbSpan, padSpan);
       list.appendChild(row);
     }
   }
@@ -403,6 +437,447 @@ export class Ui {
     return null;
   }
 
+  private setPadDeployFocus(enabled: boolean): void {
+    this.padDeployFocus = enabled;
+    const deploy = this.activeDeployButton();
+    if (!deploy) return;
+    if (enabled) deploy.focus();
+    else deploy.blur();
+  }
+
+  private padPressed(snap: ReturnType<typeof gamepad.sample>, token: string): boolean {
+    return snap.pressed.has(token) && !this.padPrevPressed.has(token);
+  }
+
+  private padNavDir(snap: ReturnType<typeof gamepad.sample>): { x: -1 | 0 | 1; y: -1 | 0 | 1 } {
+    let x: -1 | 0 | 1 = 0;
+    let y: -1 | 0 | 1 = 0;
+    if (snap.pressed.has('PadDpadLeft')) x = -1;
+    else if (snap.pressed.has('PadDpadRight')) x = 1;
+    if (snap.pressed.has('PadDpadUp')) y = -1;
+    else if (snap.pressed.has('PadDpadDown')) y = 1;
+
+    if (x === 0) {
+      if (snap.leftX < -0.62) x = -1;
+      else if (snap.leftX > 0.62) x = 1;
+    }
+    if (y === 0) {
+      if (snap.leftY < -0.62) y = -1;
+      else if (snap.leftY > 0.62) y = 1;
+    }
+    return { x, y };
+  }
+
+  private sliderContext(): { key: string; sliders: HTMLInputElement[] } | null {
+    const controls = el<HTMLDivElement>('controls');
+    const settings = el<HTMLDivElement>('settings');
+    if (!controls.classList.contains('hidden')) {
+      return {
+        key: 'controls-modal',
+        sliders: [el<HTMLInputElement>('bind-aim-sens'), el<HTMLInputElement>('bind-aim-deadzone')]
+      };
+    }
+    if (!settings.classList.contains('hidden')) {
+      return {
+        key: 'settings',
+        sliders: [el<HTMLInputElement>('vol-music'), el<HTMLInputElement>('vol-sfx'), el<HTMLInputElement>('res-scale')]
+      };
+    }
+    if (!this.join.classList.contains('hidden') && this.joinTab === 'controls') {
+      return {
+        key: 'join-controls',
+        sliders: [el<HTMLInputElement>('join-bind-aim-sens'), el<HTMLInputElement>('join-bind-aim-deadzone')]
+      };
+    }
+    if (!this.join.classList.contains('hidden') && this.joinTab === 'settings') {
+      return {
+        key: 'join-settings',
+        sliders: [el<HTMLInputElement>('join-vol-music'), el<HTMLInputElement>('join-vol-sfx'), el<HTMLInputElement>('join-res-scale')]
+      };
+    }
+    return null;
+  }
+
+  private updateSliderFocus(sliders: HTMLInputElement[]): void {
+    for (let i = 0; i < sliders.length; i++) {
+      const row = sliders[i].closest('.setrow');
+      if (!row) continue;
+      row.classList.toggle('pad-focus', i === this.padSliderIndex);
+    }
+  }
+
+  private stepSlider(input: HTMLInputElement, dir: -1 | 1): void {
+    const min = Number(input.min || '0');
+    const max = Number(input.max || '100');
+    const step = Number(input.step || '1') || 1;
+    const next = Math.max(min, Math.min(max, Number(input.value) + dir * step));
+    if (next === Number(input.value)) return;
+    input.value = String(next);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  private clearPadSliderFocus(): void {
+    for (const row of document.querySelectorAll<HTMLElement>('.setrow.pad-focus')) {
+      row.classList.remove('pad-focus');
+    }
+  }
+
+  private settingsButtons(): HTMLButtonElement[] {
+    return [el<HTMLButtonElement>('setcontrols'), el<HTMLButtonElement>('adminbtn'), el<HTMLButtonElement>('setclose')];
+  }
+
+  private focusSettingsButton(index: number): void {
+    const buttons = this.settingsButtons();
+    if (buttons.length === 0) return;
+    const clamped = Math.max(0, Math.min(buttons.length - 1, index));
+    this.padSettingsBtnIndex = clamped;
+    this.clearPadSliderFocus();
+    buttons.forEach((b, i) => b.classList.toggle('pad-focus', i === clamped));
+    buttons[clamped].focus();
+  }
+
+  private clearSettingsButtonFocus(): void {
+    if (this.padSettingsBtnIndex < 0) return;
+    for (const btn of this.settingsButtons()) {
+      btn.classList.remove('pad-focus');
+      btn.blur();
+    }
+    this.padSettingsBtnIndex = -1;
+  }
+
+  // ── Bind-list context helpers ─────────────────────────────────────────
+
+  private bindrowContext(): { key: string; rows: HTMLElement[] } | null {
+    const controls = el<HTMLDivElement>('controls');
+    if (!controls.classList.contains('hidden')) {
+      return {
+        key: 'controls-modal',
+        rows: Array.from(el<HTMLDivElement>('bindlist').querySelectorAll<HTMLElement>('.bindrow:not(.bindrow-header)'))
+      };
+    }
+    if (!this.join.classList.contains('hidden') && this.joinTab === 'controls') {
+      return {
+        key: 'join-controls',
+        rows: Array.from(el<HTMLDivElement>('join-bindlist').querySelectorAll<HTMLElement>('.bindrow:not(.bindrow-header)'))
+      };
+    }
+    return null;
+  }
+
+  private controlsModalButtons(): HTMLButtonElement[] {
+    const controls = el<HTMLDivElement>('controls');
+    if (!controls.classList.contains('hidden')) {
+      return [el<HTMLButtonElement>('bindreset'), el<HTMLButtonElement>('bindclose')];
+    }
+    if (!this.join.classList.contains('hidden') && this.joinTab === 'controls') {
+      return [el<HTMLButtonElement>('join-bindreset')];
+    }
+    return [];
+  }
+
+  private updateBindrowFocus(rows: HTMLElement[]): void {
+    rows.forEach((r, i) => r.classList.toggle('pad-focus', i === this.padBindrowIndex));
+  }
+
+  private clearBindrowFocus(rows: HTMLElement[]): void {
+    for (const r of rows) r.classList.remove('pad-focus');
+  }
+
+  private updateControlsBtnFocus(buttons: HTMLButtonElement[]): void {
+    buttons.forEach((b, i) => b.classList.toggle('pad-focus', i === this.padControlsBtnIndex));
+  }
+
+  private clearControlsBtnFocus(buttons: HTMLButtonElement[]): void {
+    for (const b of buttons) b.classList.remove('pad-focus');
+    this.padControlsBtnIndex = -1;
+  }
+
+  private triggerPadCapture(row: HTMLElement): void {
+    const action = row.dataset.action as Parameters<typeof bindings.matches>[0];
+    if (!action) return;
+    const padSpan = row.querySelector<HTMLElement>('.bpad');
+    if (!padSpan) return;
+    padSpan.textContent = 'PRESS A BUTTON…';
+    padSpan.classList.add('listening');
+    this.capturingBindKey = true;
+    this.onCaptureChange(true);
+
+    let canceled = false;
+    const cancel = (e: KeyboardEvent): void => {
+      if (e.code !== 'Escape') return;
+      canceled = true;
+      e.preventDefault();
+      e.stopPropagation();
+      window.removeEventListener('keydown', cancel, true);
+      this.capturingBindKey = false;
+      this.onCaptureChange(false);
+      this.refreshBindLists();
+    };
+    window.addEventListener('keydown', cancel, true);
+
+    void gamepad.captureButton().then((token) => {
+      window.removeEventListener('keydown', cancel, true);
+      if (!canceled && token) bindings.setPad(action, token);
+      this.capturingBindKey = false;
+      this.onCaptureChange(false);
+      this.refreshBindLists();
+    });
+  }
+
+  // ── Main pad UI loop ──────────────────────────────────────────────────
+
+  private startPadUiLoop(controls: HTMLDivElement, settings: HTMLDivElement, admin: HTMLDivElement): void {
+    const tick = (): void => {
+      const snap = gamepad.sample();
+      const now = performance.now();
+      const nav = this.padNavDir(snap);
+      const hasNav = nav.x !== 0 || nav.y !== 0;
+      const canMove = hasNav && (this.padMoveRepeatAt === 0 || now >= this.padMoveRepeatAt);
+      if (!hasNav) this.padMoveRepeatAt = 0;
+
+      // ── Start: open/close settings; respawn on death ─────────────────
+      const startPressed = this.padPressed(snap, 'PadMenu');
+      if (!this.death.classList.contains('hidden') && startPressed) {
+        this.respawnBtn.click();
+      }
+      if (startPressed && this.death.classList.contains('hidden')) {
+        if (!controls.classList.contains('hidden')) controls.classList.add('hidden');
+        else if (!admin.classList.contains('hidden')) admin.classList.add('hidden');
+        else if (!settings.classList.contains('hidden')) el<HTMLButtonElement>('setclose').click();
+        else if (this.inGame) settings.classList.toggle('hidden');
+        else if (!this.join.classList.contains('hidden') && this.joinTab === 'loadout') this.joinBtn.click();
+        // controls tab and settings tab: Start does nothing on the join screen
+      }
+
+      // ── B: close modal / back to loadout tab ──────────────────────────
+      if (this.padPressed(snap, 'PadB') && this.death.classList.contains('hidden')) {
+        if (!controls.classList.contains('hidden')) controls.classList.add('hidden');
+        else if (!admin.classList.contains('hidden')) admin.classList.add('hidden');
+        else if (!settings.classList.contains('hidden')) el<HTMLButtonElement>('setclose').click();
+        else if (!this.inGame && !this.join.classList.contains('hidden') && this.joinTab !== 'loadout') {
+          this.setJoinTab('loadout');
+        }
+      }
+
+      // ── LB / RB: cycle join-screen tabs ───────────────────────────────
+      if (!this.inGame && !this.join.classList.contains('hidden')) {
+        const tabs: Array<'loadout' | 'controls' | 'settings'> = ['loadout', 'controls', 'settings'];
+        if (this.padPressed(snap, 'PadLB')) {
+          const i = tabs.indexOf(this.joinTab);
+          this.setJoinTab(tabs[(i - 1 + tabs.length) % tabs.length]);
+        } else if (this.padPressed(snap, 'PadRB')) {
+          const i = tabs.indexOf(this.joinTab);
+          this.setJoinTab(tabs[(i + 1) % tabs.length]);
+        }
+      }
+
+      // ── Controls / bind-list navigation ───────────────────────────────
+      const bindCtx = this.bindrowContext();
+      if (bindCtx) {
+        if (this.padBindrowContext !== bindCtx.key) {
+          // Entered a new controls context – reset navigation to first row.
+          this.padBindrowContext = bindCtx.key;
+          this.padBindrowIndex = 0;
+          this.padControlsBtnIndex = -1;
+          this.padSliderContext = '';
+          this.padSliderIndex = 0;
+          this.clearPadSliderFocus();
+        }
+        const ctrlBtns = this.controlsModalButtons();
+        const bindSliders = this.sliderContext();
+        const inBind = this.padBindrowIndex >= 0;
+        const inBtn = this.padControlsBtnIndex >= 0;
+        const inSlider = !inBind && !inBtn;
+
+        if (inBind) {
+          // Re-apply highlight every frame so it survives refreshBindLists rebuilds.
+          this.updateBindrowFocus(bindCtx.rows);
+          if (!this.capturingBindKey) {
+            if (canMove && nav.y !== 0) {
+              this.padMoveRepeatAt = now + 140;
+              const next = this.padBindrowIndex + nav.y;
+              if (next >= bindCtx.rows.length) {
+                this.clearBindrowFocus(bindCtx.rows);
+                this.padBindrowIndex = -1;
+                if (bindSliders && bindSliders.sliders.length > 0) {
+                  this.padSliderContext = bindSliders.key;
+                  this.padSliderIndex = 0;
+                  this.updateSliderFocus(bindSliders.sliders);
+                } else if (ctrlBtns.length > 0) {
+                  this.padControlsBtnIndex = 0;
+                  this.updateControlsBtnFocus(ctrlBtns);
+                }
+              } else {
+                this.padBindrowIndex = Math.max(0, next);
+                this.updateBindrowFocus(bindCtx.rows);
+              }
+            }
+            if (this.padPressed(snap, 'PadA')) {
+              const row = bindCtx.rows[this.padBindrowIndex];
+              if (row) this.triggerPadCapture(row);
+            }
+          }
+        } else if (inSlider && bindSliders) {
+          if (this.padSliderContext !== bindSliders.key) {
+            this.padSliderContext = bindSliders.key;
+            this.padSliderIndex = 0;
+          }
+          if (canMove) {
+            this.padMoveRepeatAt = now + 140;
+            if (nav.y !== 0) {
+              const next = this.padSliderIndex + nav.y;
+              if (nav.y < 0 && next < 0) {
+                this.clearPadSliderFocus();
+                this.padSliderContext = '';
+                this.padBindrowIndex = Math.max(0, bindCtx.rows.length - 1);
+                this.updateBindrowFocus(bindCtx.rows);
+              } else if (nav.y > 0 && next >= bindSliders.sliders.length) {
+                this.clearPadSliderFocus();
+                this.padSliderContext = '';
+                if (ctrlBtns.length > 0) {
+                  this.padControlsBtnIndex = 0;
+                  this.updateControlsBtnFocus(ctrlBtns);
+                }
+              } else {
+                this.padSliderIndex = Math.max(0, Math.min(bindSliders.sliders.length - 1, next));
+              }
+            }
+            if (nav.x !== 0) this.stepSlider(bindSliders.sliders[this.padSliderIndex], nav.x);
+          }
+          this.updateSliderFocus(bindSliders.sliders);
+        } else if (inBtn) {
+          this.updateControlsBtnFocus(ctrlBtns);
+          if (canMove && (nav.x !== 0 || nav.y !== 0)) {
+            this.padMoveRepeatAt = now + 140;
+            if (nav.y < 0) {
+              // UP from any button → back to last slider.
+              this.clearControlsBtnFocus(ctrlBtns);
+              if (bindSliders && bindSliders.sliders.length > 0) {
+                this.padSliderContext = bindSliders.key;
+                this.padSliderIndex = bindSliders.sliders.length - 1;
+                this.updateSliderFocus(bindSliders.sliders);
+              }
+            } else if (nav.x !== 0) {
+              // LEFT / RIGHT → move between buttons.
+              this.padControlsBtnIndex = Math.max(0, Math.min(ctrlBtns.length - 1, this.padControlsBtnIndex + nav.x));
+              this.updateControlsBtnFocus(ctrlBtns);
+            }
+            // nav.y > 0: nothing below the buttons.
+          }
+          if (!this.capturingBindKey && this.padPressed(snap, 'PadA')) {
+            ctrlBtns[this.padControlsBtnIndex]?.click();
+          }
+        }
+      } else {
+        if (this.padBindrowContext !== '') {
+          this.padBindrowContext = '';
+          this.padBindrowIndex = -1;
+          this.padControlsBtnIndex = -1;
+        }
+      }
+
+      // ── Settings / join-tab slider nav (sliders → buttons) ────────────
+      const settingsOpen = !settings.classList.contains('hidden');
+      if (!settingsOpen) this.clearSettingsButtonFocus();
+
+      if (!bindCtx) {
+        const sliderCtx = this.sliderContext();
+        if (sliderCtx) {
+          const inSettBtn = settingsOpen && this.padSettingsBtnIndex >= 0;
+          if (!inSettBtn) {
+            if (this.padSliderContext !== sliderCtx.key) {
+              this.padSliderContext = sliderCtx.key;
+              this.padSliderIndex = 0;
+            }
+            if (canMove && nav.y !== 0) {
+              this.padMoveRepeatAt = now + 140;
+              const next = this.padSliderIndex + nav.y;
+              if (settingsOpen && nav.y > 0 && next >= sliderCtx.sliders.length) {
+                // Overflow past last slider → move to settings buttons.
+                this.clearPadSliderFocus();
+                this.padSliderContext = '';
+                this.focusSettingsButton(0);
+              } else {
+                this.padSliderIndex = Math.max(0, Math.min(sliderCtx.sliders.length - 1, next));
+              }
+            }
+            if (canMove && nav.x !== 0) {
+              this.padMoveRepeatAt = now + 140;
+              this.stepSlider(sliderCtx.sliders[this.padSliderIndex], nav.x);
+            }
+            this.updateSliderFocus(sliderCtx.sliders);
+          } else {
+            // In settings button mode (buttons are laid out horizontally).
+            const settBtns = this.settingsButtons();
+            if (canMove && (nav.x !== 0 || nav.y !== 0)) {
+              this.padMoveRepeatAt = now + 140;
+              if (nav.y < 0) {
+                // UP from any button → back to last slider (Resolution).
+                this.clearSettingsButtonFocus();
+                const sl = this.sliderContext();
+                if (sl && sl.sliders.length > 0) {
+                  this.padSliderContext = sl.key;
+                  this.padSliderIndex = sl.sliders.length - 1;
+                  this.updateSliderFocus(sl.sliders);
+                }
+              } else if (nav.x !== 0) {
+                // LEFT / RIGHT → move between buttons.
+                this.focusSettingsButton(Math.max(0, Math.min(settBtns.length - 1, this.padSettingsBtnIndex + nav.x)));
+              }
+              // nav.y > 0: nothing below the buttons.
+            }
+            if (this.padPressed(snap, 'PadA')) settBtns[this.padSettingsBtnIndex]?.click();
+          }
+        } else if (this.padSliderContext !== '') {
+          this.padSliderContext = '';
+          this.clearPadSliderFocus();
+        }
+      }
+
+      // ── Loadout picker nav ─────────────────────────────────────────────
+      const activeSliders = this.sliderContext();
+      const picker = this.activePickerContext();
+      const deployBtn = this.activeDeployButton();
+      if (picker && deployBtn) {
+        if (this.padPressed(snap, 'PadY')) {
+          this.setPadDeployFocus(!this.padDeployFocus);
+          if (!this.padDeployFocus) this.focusPickerSelected(picker.container, picker.cursor);
+        }
+        if (!this.padDeployFocus) {
+          if (canMove && (nav.x !== 0 || nav.y !== 0) && !activeSliders) {
+            const pickerRows = this.getPickerRows(picker.container);
+            const { row, col } = picker.cursor;
+            if (nav.y === 1 && col >= (pickerRows[row]?.length ?? 0) - 1) {
+              // Scrolled past the last item in this column → focus deploy button.
+              this.setPadDeployFocus(true);
+              this.padMoveRepeatAt = now + 140;
+            } else {
+              this.padMoveRepeatAt = now + 140;
+              // nav.y → dx (within-column), nav.x → dy (between-columns).
+              this.movePicker(picker.container, picker.cursor, nav.y, nav.x);
+            }
+          }
+        } else if (canMove && nav.y === -1) {
+          // Move back from deploy button into the picker.
+          this.setPadDeployFocus(false);
+          this.focusPickerSelected(picker.container, picker.cursor);
+          this.padMoveRepeatAt = now + 140;
+        }
+        if (this.padPressed(snap, 'PadA')) {
+          if (this.padDeployFocus) deployBtn.click();
+          else this.activatePicker(picker.container, picker.cursor);
+        }
+        if (this.padPressed(snap, 'PadX')) deployBtn.click();
+      } else {
+        this.padDeployFocus = false;
+      }
+
+      this.padPrevPressed = new Set(snap.pressed);
+      this.padLoop = window.requestAnimationFrame(tick);
+    };
+    this.padLoop = window.requestAnimationFrame(tick);
+  }
+
   private normalizeJoinTabHeights(): void {
     const keys: Array<'loadout' | 'controls' | 'settings'> = ['loadout', 'controls', 'settings'];
     const current = this.joinTab;
@@ -422,6 +897,15 @@ export class Ui {
     controls.classList.remove('hidden');
   }
 
+  /** True whenever an in-game overlay modal (settings/controls/admin) is visible. */
+  get isMenuOpen(): boolean {
+    return (
+      !el<HTMLElement>('settings').classList.contains('hidden') ||
+      !el<HTMLElement>('controls').classList.contains('hidden') ||
+      !el<HTMLElement>('admin').classList.contains('hidden')
+    );
+  }
+
   constructor() {
     const controls = el<HTMLDivElement>('controls');
     this.joinTabs.forEach((btn) => {
@@ -439,6 +923,8 @@ export class Ui {
     const volMusic = [el<HTMLInputElement>('vol-music'), el<HTMLInputElement>('join-vol-music')];
     const volSfx = [el<HTMLInputElement>('vol-sfx'), el<HTMLInputElement>('join-vol-sfx')];
     const resScale = [el<HTMLInputElement>('res-scale'), el<HTMLInputElement>('join-res-scale')];
+    const aimSens = [el<HTMLInputElement>('bind-aim-sens'), el<HTMLInputElement>('join-bind-aim-sens')];
+    const aimDeadzone = [el<HTMLInputElement>('bind-aim-deadzone'), el<HTMLInputElement>('join-bind-aim-deadzone')];
     const syncSlider = (group: HTMLInputElement[], value: number): void => {
       const text = String(Math.round(value));
       for (const input of group) {
@@ -449,6 +935,8 @@ export class Ui {
     syncSlider(volMusic, audio.musicVol * 100);
     syncSlider(volSfx, audio.sfxVol * 100);
     syncSlider(resScale, getRenderScale() * 100);
+    syncSlider(aimSens, gamepad.getAimSensitivity() * 100);
+    syncSlider(aimDeadzone, gamepad.getAimDeadzone() * 100);
 
     const onMusic = (src: HTMLInputElement): void => {
       audio.resume();
@@ -467,10 +955,22 @@ export class Ui {
       setRenderScale(value / 100);
       syncSlider(resScale, value);
     };
+    const onAimSens = (src: HTMLInputElement): void => {
+      const value = Number(src.value);
+      gamepad.setAimSensitivity(value / 100);
+      syncSlider(aimSens, value);
+    };
+    const onAimDeadzone = (src: HTMLInputElement): void => {
+      const value = Number(src.value);
+      gamepad.setAimDeadzone(value / 100);
+      syncSlider(aimDeadzone, value);
+    };
 
     volMusic.forEach((input) => input.addEventListener('input', () => onMusic(input)));
     volSfx.forEach((input) => input.addEventListener('input', () => onSfx(input)));
     resScale.forEach((input) => input.addEventListener('input', () => onRes(input)));
+    aimSens.forEach((input) => input.addEventListener('input', () => onAimSens(input)));
+    aimDeadzone.forEach((input) => input.addEventListener('input', () => onAimDeadzone(input)));
 
     el<HTMLButtonElement>('setclose').addEventListener('click', () => {
       settings.classList.add('hidden');
@@ -570,6 +1070,7 @@ export class Ui {
       this.refreshBindLists();
     });
     this.refreshBindLists();
+    this.startPadUiLoop(controls, settings, admin);
 
     buildLoadoutPicker(this.joinWeapons, this.loadout, this.nadeSel);
     this.focusPickerSelected(this.joinWeapons, this.joinCursor);
@@ -623,6 +1124,7 @@ export class Ui {
     this.focusPickerSelected(this.deathWeapons, this.deathCursor);
     this.deathMsg.textContent = killerName ? `ELIMINATED BY ${killerName.toUpperCase()}` : 'YOU DIED';
     this.death.classList.remove('hidden');
+    this.setPadDeployFocus(false);
     this.respawnReadyAt = performance.now() + (instant ? 0 : RESPAWN_TICKS * TICK_MS);
     this.respawnBtn.disabled = true;
 
@@ -643,6 +1145,7 @@ export class Ui {
 
   hideDeath(): void {
     this.death.classList.add('hidden');
+    this.setPadDeployFocus(false);
     this.clearPickerHover(this.deathWeapons);
   }
 

@@ -10,16 +10,58 @@
     />
     <link rel="stylesheet" href="/src/client/style.css" />
     <style>
-      #boot { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center;
-        justify-content: center; background: #05060d; transition: opacity 0.35s; font-family: system-ui, sans-serif; }
-      #boot .bootbox { width: min(420px, 80vw); text-align: center; }
-      #boot h1 { color: #9fc2ff; letter-spacing: 0.25em; font-size: 22px; margin: 0 0 18px; }
-      #bootbar { height: 6px; background: #141b2e; border-radius: 3px; overflow: hidden; }
-      #bootfill { height: 100%; width: 3%; background: linear-gradient(90deg, #2f80c9, #4dd7ff);
-        border-radius: 3px; transition: width 0.25s; }
-      #bootmsg { color: #5c6f96; font-size: 12px; letter-spacing: 0.12em; margin-top: 12px; min-height: 16px; }
-      #bootretry { display: none; margin-top: 14px; padding: 8px 26px; background: #1a2440; color: #9fc2ff;
-        border: 1px solid #2f4370; border-radius: 4px; letter-spacing: 0.2em; cursor: pointer; }
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #05060d;
+        transition: opacity 0.35s;
+        font-family: system-ui, sans-serif;
+      }
+      #boot .bootbox {
+        width: min(420px, 80vw);
+        text-align: center;
+      }
+      #boot h1 {
+        color: #9fc2ff;
+        letter-spacing: 0.25em;
+        font-size: 22px;
+        margin: 0 0 18px;
+      }
+      #bootbar {
+        height: 6px;
+        background: #141b2e;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      #bootfill {
+        height: 100%;
+        width: 3%;
+        background: linear-gradient(90deg, #2f80c9, #4dd7ff);
+        border-radius: 3px;
+        transition: width 0.25s;
+      }
+      #bootmsg {
+        color: #5c6f96;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        margin-top: 12px;
+        min-height: 16px;
+      }
+      #bootretry {
+        display: none;
+        margin-top: 14px;
+        padding: 8px 26px;
+        background: #1a2440;
+        color: #9fc2ff;
+        border: 1px solid #2f4370;
+        border-radius: 4px;
+        letter-spacing: 0.2em;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
@@ -44,7 +86,9 @@
             window.BOOT.fail('connection timed out');
           }, 12000);
         }
-        retry.addEventListener('click', function () { location.reload(); });
+        retry.addEventListener('click', function () {
+          location.reload();
+        });
         window.BOOT = {
           set: function (f, label) {
             if (failed) return;
@@ -58,14 +102,16 @@
             if (!b) return;
             b.style.opacity = '0';
             b.style.pointerEvents = 'none';
-            setTimeout(function () { b.remove(); }, 400);
+            setTimeout(function () {
+              b.remove();
+            }, 400);
           },
           fail: function (m) {
             failed = true;
             clearTimeout(wd);
             msg.textContent = m + ' \u2014 tap retry';
             retry.style.display = 'inline-block';
-          },
+          }
         };
         arm();
       })();
@@ -117,91 +163,36 @@
     <div id="join" class="screen">
       <div class="panel">
         <h1>JETPACK ARENA</h1>
-        <p class="sub">
-          A/D move · W jetpack · S dive · SPACE jump · click fire · R reload · Q
-          bandage · E hold-prime grenade · TAB scores
-        </p>
-        <input
-          id="name"
-          maxlength="16"
-          placeholder="callsign"
-          autocomplete="off"
-          spellcheck="false"
-        />
-        <div
-          id="join-tabs"
-          class="join-tabs"
-          role="tablist"
-          aria-label="predeploy menus"
-        >
-          <button
-            type="button"
-            class="join-tab active"
-            data-tab="loadout"
-            role="tab"
-            aria-selected="true"
-            aria-controls="join-tab-loadout"
-          >
+        <input id="name" maxlength="16" placeholder="callsign" autocomplete="off" spellcheck="false" />
+        <div id="join-tabs" class="join-tabs" role="tablist" aria-label="predeploy menus">
+          <button type="button" class="join-tab active" data-tab="loadout" role="tab" aria-selected="true" aria-controls="join-tab-loadout">
             LOADOUT
           </button>
-          <button
-            type="button"
-            class="join-tab"
-            data-tab="controls"
-            role="tab"
-            aria-selected="false"
-            aria-controls="join-tab-controls"
-          >
+          <button type="button" class="join-tab" data-tab="controls" role="tab" aria-selected="false" aria-controls="join-tab-controls">
             CONTROLS
           </button>
-          <button
-            type="button"
-            class="join-tab"
-            data-tab="settings"
-            role="tab"
-            aria-selected="false"
-            aria-controls="join-tab-settings"
-          >
+          <button type="button" class="join-tab" data-tab="settings" role="tab" aria-selected="false" aria-controls="join-tab-settings">
             SETTINGS
           </button>
         </div>
-        <div
-          id="join-tab-loadout"
-          class="join-tab-panel loadout"
-          role="tabpanel"
-        >
+        <div id="join-tab-loadout" class="join-tab-panel loadout" role="tabpanel">
           <div id="join-weapons" class="loadout"></div>
           <button id="joinbtn">DEPLOY</button>
         </div>
-        <div
-          id="join-tab-controls"
-          class="join-tab-panel hidden"
-          role="tabpanel"
-        >
+        <div id="join-tab-controls" class="join-tab-panel hidden" role="tabpanel">
           <p class="sub join-tab-sub">
-            click a key to rebind · fire is always left mouse
+            click a row to rebind keyboard · controller: D-pad to navigate, A to rebind gamepad button · fire is mouse left / RT
           </p>
           <div id="join-bindlist"></div>
+          <div class="setrow"><span>STICK SENSITIVITY</span><input type="range" id="join-bind-aim-sens" min="20" max="100" /></div>
+          <div class="setrow"><span>STICK DEADZONE</span><input type="range" id="join-bind-aim-deadzone" min="5" max="45" /></div>
           <button id="join-bindreset" class="minor">RESET DEFAULTS</button>
         </div>
-        <div
-          id="join-tab-settings"
-          class="join-tab-panel hidden"
-          role="tabpanel"
-        >
-          <p class="sub join-tab-sub">audio and resolution persist</p>
-          <div class="setrow">
-            <span>BACKGROUND</span
-            ><input type="range" id="join-vol-music" min="0" max="100" />
-          </div>
-          <div class="setrow">
-            <span>EFFECTS</span
-            ><input type="range" id="join-vol-sfx" min="0" max="100" />
-          </div>
-          <div class="setrow">
-            <span>RESOLUTION</span
-            ><input type="range" id="join-res-scale" min="50" max="100" />
-          </div>
+        <div id="join-tab-settings" class="join-tab-panel hidden" role="tabpanel">
+          <p class="sub join-tab-sub">audio and render settings persist</p>
+          <div class="setrow"><span>BACKGROUND</span><input type="range" id="join-vol-music" min="0" max="100" /></div>
+          <div class="setrow"><span>EFFECTS</span><input type="range" id="join-vol-sfx" min="0" max="100" /></div>
+          <div class="setrow"><span>RESOLUTION</span><input type="range" id="join-res-scale" min="50" max="100" /></div>
         </div>
         <div id="join-status"></div>
       </div>
@@ -210,8 +201,12 @@
     <div id="controls" class="screen hidden">
       <div class="panel">
         <h2 style="color: #9fc2ff">CONTROLS</h2>
-        <p class="sub">click a key to rebind · fire is always left mouse</p>
+        <p class="sub">
+          click a row to rebind keyboard · controller: D-pad to navigate, A to rebind gamepad button · fire is mouse left / RT
+        </p>
         <div id="bindlist"></div>
+        <div class="setrow"><span>STICK SENSITIVITY</span><input type="range" id="bind-aim-sens" min="20" max="100" /></div>
+        <div class="setrow"><span>STICK DEADZONE</span><input type="range" id="bind-aim-deadzone" min="5" max="45" /></div>
         <button id="bindreset" class="minor">RESET DEFAULTS</button>
         <button id="bindclose">DONE</button>
       </div>
@@ -229,18 +224,9 @@
       <div class="panel">
         <h2 style="color: #9fc2ff">SETTINGS</h2>
         <p class="sub">ESC opens this menu any time</p>
-        <div class="setrow">
-          <span>BACKGROUND</span
-          ><input type="range" id="vol-music" min="0" max="100" />
-        </div>
-        <div class="setrow">
-          <span>EFFECTS</span
-          ><input type="range" id="vol-sfx" min="0" max="100" />
-        </div>
-        <div class="setrow">
-          <span>RESOLUTION</span
-          ><input type="range" id="res-scale" min="50" max="100" />
-        </div>
+        <div class="setrow"><span>BACKGROUND</span><input type="range" id="vol-music" min="0" max="100" /></div>
+        <div class="setrow"><span>EFFECTS</span><input type="range" id="vol-sfx" min="0" max="100" /></div>
+        <div class="setrow"><span>RESOLUTION</span><input type="range" id="res-scale" min="50" max="100" /></div>
         <button id="setcontrols" class="minor">INPUT / KEY BINDINGS</button>
         <button id="adminbtn" class="minor">ADMIN</button>
         <button id="setclose">DONE</button>
@@ -250,9 +236,7 @@
     <div id="admin" class="screen hidden">
       <div class="panel" style="max-width: 1100px">
         <h2 style="color: #ffb27a">LIVE TUNING</h2>
-        <p class="sub">
-          changes apply instantly to the server and every player on it
-        </p>
+        <p class="sub">changes apply instantly to the server and every player on it</p>
         <div id="adminlist"></div>
         <button id="adminclose">DONE</button>
       </div>
