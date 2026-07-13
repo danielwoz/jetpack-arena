@@ -319,23 +319,37 @@ export class Ui {
       padSpan.className = 'bpad';
       padSpan.textContent = bindings.padLabel(action);
 
-      // Clicking the row captures a keyboard key for this action.
+      // Clicking the row captures a key or mouse button for this action.
       row.addEventListener('click', () => {
         if (this.capturingBindKey) return;
         kbSpan.textContent = 'PRESS A KEY…';
         kbSpan.classList.add('listening');
         this.capturingBindKey = true;
         this.onCaptureChange(true);
-        const capture = (e: KeyboardEvent): void => {
-          e.preventDefault();
-          e.stopPropagation();
-          window.removeEventListener('keydown', capture, true);
+        let done = false;
+        const finish = (code: string): void => {
+          if (done) return;
+          done = true;
+          window.removeEventListener('keydown', captureKey, true);
+          window.removeEventListener('mousedown', captureMouse, true);
           this.capturingBindKey = false;
           this.onCaptureChange(false);
-          if (e.code !== 'Escape') bindings.set(action, e.code);
+          if (code !== 'Escape') bindings.set(action, code);
           this.refreshBindLists();
         };
-        window.addEventListener('keydown', capture, true);
+        const captureKey = (e: KeyboardEvent): void => {
+          e.preventDefault();
+          e.stopPropagation();
+          finish(e.code);
+        };
+        const captureMouse = (e: MouseEvent): void => {
+          if (e.button === 0) return; // left click is fire — skip
+          e.preventDefault();
+          e.stopPropagation();
+          finish(`Mouse${e.button}`);
+        };
+        window.addEventListener('keydown', captureKey, true);
+        window.addEventListener('mousedown', captureMouse, true);
       });
 
       row.append(label, kbSpan, padSpan);

@@ -14,7 +14,8 @@ export class Input {
   mouseX = 0; // CSS pixels
   mouseY = 0;
   scoreboardHeld = false;
-  zoomHeld = false; // right mouse: magnifier lens
+  zoomHeld = false; // right mouse: marksman zoom-out
+  padZoomHeld = false; // right stick click (PadRS): same effect
   capturing = false; // a bind-picker owns the next keystroke
   private padAim = 0;
   private stickAimUntil = 0;
@@ -76,11 +77,11 @@ export class Input {
       if (e.button === 0 && !(e.target as HTMLElement).closest('.screen, button')) {
         this.fireHeld = true;
       }
-      if (e.button === 2) this.zoomHeld = true;
+      if (bindings.matchesMouse('zoom', e.button)) this.zoomHeld = true;
     });
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.fireHeld = false;
-      if (e.button === 2) this.zoomHeld = false;
+      if (bindings.matchesMouse('zoom', e.button)) this.zoomHeld = false;
     });
     window.addEventListener('contextmenu', (e) => e.preventDefault());
   }
@@ -124,6 +125,15 @@ export class Input {
     const aim = usePadAim || this.padMode ? this.padAim : mouseAim;
     if (!usePadAim && !this.padMode) this.padAim = mouseAim;
 
+    let padZoom = false;
+    for (const token of pad.pressed) {
+      if (bindings.matchesPad('zoom', token)) {
+        padZoom = true;
+        break;
+      }
+    }
+    this.padZoomHeld = padZoom;
+
     if (this.menuOpen) {
       // A menu is open — deliver a zero-input command so the player freezes,
       // but still keep aim/crosshair tracking up to date.
@@ -144,6 +154,7 @@ export class Input {
         reload: false,
         heal: false,
         nade: false,
+        zoom: false,
         rt
       };
     }
@@ -186,7 +197,7 @@ export class Input {
       reload: this.reloadQueued,
       heal: this.healQueued,
       nade: this.has('nade') || padHold('nade'),
-      zoom: this.zoomHeld,
+      zoom: this.zoomHeld || this.padZoomHeld,
       rt
     };
     if (!this.has('scores')) this.scoreboardHeld = padHold('scores');
