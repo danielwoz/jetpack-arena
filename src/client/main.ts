@@ -1,5 +1,5 @@
 import { FLASH_BLIND_SECS, FLASH_RADIUS, PLAYER_HH, TICK_MS } from '../shared/constants.ts';
-import { lerp } from '../shared/math.ts';
+import { clamp, lerp } from '../shared/math.ts';
 import { NADES, WEAPONS, reloadTicks, spreadRad } from '../shared/weapons.ts';
 import type { PlayerState, Snapshot } from '../shared/types.ts';
 import { audio } from './audio.ts';
@@ -354,6 +354,7 @@ function fixedStep(): void {
   remotes: () => remotes,
   snap: () => interp.latest(),
   myId: () => net?.myId ?? -1,
+  cam: () => ({ x: camera.x, y: camera.y, vw: camera.viewW, vh: camera.viewH }),
   screenOf: (id: number) => {
     const rp = remotes.find((p) => p.id === id);
     if (!rp) return null;
@@ -446,7 +447,16 @@ function render(dtSec: number, alpha: number): void {
   spawnSeen = st.alive;
   spawnFade = Math.max(0, spawnFade - dtSec / 2);
 
-  if (st.alive) camera.follow(rx, ry, dtSec);
+  if (st.alive) {
+    // the camera leads toward the cursor so you can peek where you aim;
+    // the world-bounds clamp still applies, so it never shows past the edge
+    const CAM_LEAD = 0.35;
+    const cw = glCanvas.clientWidth || 1;
+    const ch = glCanvas.clientHeight || 1;
+    const leadX = clamp(input.mouseX / cw - 0.5, -0.5, 0.5) * camera.viewW * CAM_LEAD;
+    const leadY = clamp(input.mouseY / ch - 0.5, -0.5, 0.5) * camera.viewH * CAM_LEAD;
+    camera.follow(rx + leadX, ry + leadY, dtSec);
+  }
 
   // frag blast screen shake, decaying fast
   if (shakeAmp > 0.3) {
