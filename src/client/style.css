@@ -425,10 +425,11 @@ button.pad-focus {
   font-size: 10px;
   letter-spacing: 2px;
   color: #566187;
-  text-align: right;
+  text-align: center;
+  min-width: 110px;
 }
 .bindrow-header span:first-child {
-  text-align: left;
+  min-width: 0;
 }
 .bindrow:hover:not(.bindrow-header) {
   background: rgba(91, 130, 232, 0.07);

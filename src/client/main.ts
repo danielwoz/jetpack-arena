@@ -465,7 +465,7 @@ function render(dtSec: number, alpha: number): void {
 
   // right mouse: marksman overwatch — with the SLR or M24 in hand the whole
   // view pulls back to twice the distance in every direction
-  const wantZoom = input.zoomHeld && st.alive && (st.weapon === 'dmr' || st.weapon === 'sniper');
+  const wantZoom = (input.zoomHeld || input.padZoomHeld) && st.alive && (st.weapon === 'dmr' || st.weapon === 'sniper');
   camZoom += ((wantZoom ? 2 : 1) - camZoom) * (1 - Math.exp(-8 * dtSec));
   camera.zoom = camZoom;
   lensCam.zoom = camZoom;
@@ -563,7 +563,7 @@ function render(dtSec: number, alpha: number): void {
   // magnifier lens, retired in favor of the marksman camera zoom-out;
   // kept around in case it returns as a scope attachment
   const LENS_ENABLED = false;
-  if (LENS_ENABLED && input.zoomHeld && st.alive) {
+  if (LENS_ENABLED && (input.zoomHeld || input.padZoomHeld) && st.alive) {
     const cw = glCanvas.clientWidth;
     const ch = glCanvas.clientHeight;
     const scale = renderer.width / Math.max(1, cw);

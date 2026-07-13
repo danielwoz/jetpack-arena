@@ -14,7 +14,8 @@ export type Action =
   | 'reload'
   | 'heal'
   | 'nade'
-  | 'scores';
+  | 'scores'
+  | 'zoom';
 
 export const ACTION_LABELS: Record<Action, string> = {
   left: 'Move left',
@@ -29,7 +30,8 @@ export const ACTION_LABELS: Record<Action, string> = {
   reload: 'Reload',
   heal: 'Bandage',
   nade: 'Grenade (hold)',
-  scores: 'Scoreboard'
+  scores: 'Scoreboard',
+  zoom: 'Zoom (hold)'
 };
 
 export const ACTIONS = Object.keys(ACTION_LABELS) as Action[];
@@ -47,7 +49,8 @@ const DEFAULTS: Record<Action, string[]> = {
   reload: ['KeyR'],
   heal: ['KeyQ'],
   nade: ['KeyE'],
-  scores: ['Tab']
+  scores: ['Tab'],
+  zoom: ['Mouse2']
 };
 
 const PAD_DEFAULTS: Record<Action, string> = {
@@ -63,13 +66,18 @@ const PAD_DEFAULTS: Record<Action, string> = {
   reload: 'PadX',
   heal: 'PadLB',
   nade: 'PadRB',
-  scores: 'PadView'
+  scores: 'PadView',
+  zoom: 'PadRS'
 };
 
 const STORE_KEY = 'keybinds';
 const PAD_STORE_KEY = 'padbinds';
 
 function keyName(code: string): string {
+  if (code.startsWith('Mouse')) {
+    const btn = Number(code.slice(5));
+    return btn === 0 ? 'L-CLICK' : btn === 1 ? 'M-CLICK' : btn === 2 ? 'R-CLICK' : `MOUSE${btn}`;
+  }
   if (code.startsWith('Key')) return code.slice(3);
   if (code.startsWith('Digit')) return code.slice(5);
   const special: Record<string, string> = {
@@ -152,6 +160,10 @@ class Bindings {
 
   isBound(code: string): boolean {
     return ACTIONS.some((a) => this.map[a].includes(code));
+  }
+
+  matchesMouse(action: Action, button: number): boolean {
+    return this.map[action].includes(`Mouse${button}`);
   }
 
   matchesPad(action: Action, code: string): boolean {
