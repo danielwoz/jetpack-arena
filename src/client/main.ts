@@ -458,12 +458,19 @@ function render(dtSec: number, alpha: number): void {
   camera.updateAspect(glCanvas.clientWidth, glCanvas.clientHeight);
 
   if (st.alive) {
-    // the camera leads toward the cursor so you can peek where you aim;
-    // the world-bounds clamp still applies, so it never shows past the edge
+    // the camera leads toward the cursor so you can peek where you aim,
+    // but only once the cursor passes halfway from center to a screen edge
+    // (per axis, so the horizontal threshold sits proportionally further
+    // out on a wide screen); it then ramps to full lead at the edge. The
+    // world-bounds clamp still applies, so it never shows past the map.
+    const leadFrac = (f: number): number => {
+      const a = Math.abs(f);
+      return a <= 0.25 ? 0 : Math.sign(f) * (a - 0.25) * 2;
+    };
     const cw = glCanvas.clientWidth || 1;
     const ch = glCanvas.clientHeight || 1;
-    const leadX = clamp(input.mouseX / cw - 0.5, -0.5, 0.5) * camera.viewW * TUNE.camLead;
-    const leadY = clamp(input.mouseY / ch - 0.5, -0.5, 0.5) * camera.viewH * TUNE.camLead;
+    const leadX = leadFrac(clamp(input.mouseX / cw - 0.5, -0.5, 0.5)) * camera.viewW * TUNE.camLead;
+    const leadY = leadFrac(clamp(input.mouseY / ch - 0.5, -0.5, 0.5)) * camera.viewH * TUNE.camLead;
     camera.follow(rx + leadX, ry + leadY, dtSec);
   }
 
