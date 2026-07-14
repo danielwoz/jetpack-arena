@@ -1166,6 +1166,19 @@ export class Ui {
   showDisconnected(): void {
     this.death.classList.add('hidden');
     this.join.classList.add('hidden');
+    const sub = this.disconnected.querySelector('.sub');
+    if (sub) sub.textContent = 'reconnecting\u2026';
     this.disconnected.classList.remove('hidden');
+  }
+
+  hideDisconnected(): void {
+    this.disconnected.classList.add('hidden');
+  }
+
+  // programmatic deploy for the auto-rejoin path after a reload
+  autoDeploy(): boolean {
+    if (!this.nameInput.value.trim()) return false;
+    this.joinBtn.click();
+    return true;
   }
 }

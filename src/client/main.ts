@@ -93,7 +93,13 @@ async function preloadAssets(): Promise<void> {
 
 // bake procedural textures after first paint; AI upgrades then read
 // straight from the warmed HTTP cache
-void preloadAssets().then(() => ensureTextures(renderer));
+void preloadAssets().then(() => {
+  ensureTextures(renderer);
+  if (sessionStorage.getItem('rejoin')) {
+    sessionStorage.removeItem('rejoin');
+    ui.autoDeploy();
+  }
+});
 
 // /?cells — every sprite cell as a data URL, for the AI re-texture pipeline
 const GL_STATS = new URLSearchParams(location.search).has('glstats');
@@ -186,17 +192,52 @@ let wasAlive = false;
 let lastKillerName: string | null = null;
 let remotes: RenderPlayer[] = [];
 
-ui.onJoin = (name, loadout, nadeType) => {
+let lastJoin: { name: string; loadout: Parameters<typeof Net.connect>[1]; nadeType: Parameters<typeof Net.connect>[2] } | null = null;
+
+const doJoin = (name: string, loadout: Parameters<typeof Net.connect>[1], nadeType: Parameters<typeof Net.connect>[2], silent = false): void => {
   Net.connect(name, loadout, nadeType)
     .then((n) => {
       net = n;
-      net.onClose = () => ui.showDisconnected();
+      lastJoin = { name, loadout, nadeType };
+      net.onClose = () => void reconnect();
       net.onSnap = onSnapshot;
+      ui.hideDisconnected();
     })
     .catch((err: Error) => {
-      ui.joinFailed(err.message);
+      if (silent) setTimeout(() => void reconnect(), 2000);
+      else ui.joinFailed(err.message);
     });
 };
+
+ui.onJoin = (name, loadout, nadeType) => doJoin(name, loadout, nadeType);
+
+// Connection lost: wait for the server to answer again, then either rejoin
+// silently (same build still deployed) or reload into the new build — the
+// server keeps our round score for when we come back either way.
+const BUNDLE = new URL(import.meta.url).pathname;
+
+async function reconnect(): Promise<void> {
+  ui.showDisconnected();
+  for (;;) {
+    try {
+      const res = await fetch('/', { cache: 'no-store' });
+      if (res.ok) {
+        const html = await res.text();
+        const m2 = html.match(/\/assets\/index-[\w-]+\.js/);
+        if (m2 && m2[0] !== BUNDLE) {
+          // a new build shipped while we were gone: pull it in and let the
+          // boot flow rejoin automatically
+          sessionStorage.setItem('rejoin', '1');
+          location.reload();
+          return;
+        }
+        break;
+      }
+    } catch { /* server still down — keep waiting */ }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  if (lastJoin) doJoin(lastJoin.name, lastJoin.loadout, lastJoin.nadeType, true);
+}
 
 ui.onRespawn = (loadout, nadeType) => {
   net?.sendRespawn(loadout, nadeType);

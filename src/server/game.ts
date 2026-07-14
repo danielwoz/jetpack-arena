@@ -154,6 +154,10 @@ export class GameRoom {
   private nextId = 1;
   private nextPingId = 1;
   private nextNadeId = 1;
+  // round scores of disconnected humans, keyed by callsign — restored if
+  // they rejoin before the round ends
+  private ghostScores = new Map<string, { kills: number; deaths: number; assists: number; dmg: number }>();
+
   private roundLen = Number(process.env.ROUND_SECS) > 0 ? secTicks(Number(process.env.ROUND_SECS)) : ROUND_TICKS;
   private roundEnd = this.roundLen;
   private interEnd = 0;      // >0: intermission until this tick
@@ -207,6 +211,16 @@ export class GameRoom {
           map: CURRENT_MAP,
           tune: tuneSnapshot(),
         }));
+        // a returning player picks their round score back up
+        const ghost = this.ghostScores.get(name.toLowerCase());
+        if (ghost) {
+          player.kills = ghost.kills;
+          player.deaths = ghost.deaths;
+          player.assists = ghost.assists;
+          player.dmg = ghost.dmg;
+          this.ghostScores.delete(name.toLowerCase());
+          console.log(`[join] ${name} restored ${ghost.kills}/${ghost.deaths}`);
+        }
         console.log(`[join] #${player.id} ${name} (${loadout.join('/')})${lag ? ` lag=${lag}ms` : ''} — ${this.players.size} online`);
         return;
       }
@@ -254,6 +268,11 @@ export class GameRoom {
 
     conn.onClose = () => {
       if (player) {
+        // remember the score in case they come back this round
+        this.ghostScores.set(player.name.toLowerCase(), {
+          kills: player.kills, deaths: player.deaths,
+          assists: player.assists, dmg: player.dmg,
+        });
         this.players.delete(player.id);
         console.log(`[leave] #${player.id} ${player.name} — ${this.players.size} online`);
       }
@@ -551,6 +570,7 @@ export class GameRoom {
   // Round over: fill the craters, wipe scores, and redeploy everyone.
   private resetRound(): void {
     this.roundEnd = this.tick + this.roundLen;
+    this.ghostScores.clear();
     this.world.setHoles([]);
     this.nades = [];
     this.fires = [];
