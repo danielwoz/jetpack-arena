@@ -49,6 +49,7 @@ interface BotBrain {
   losTicks: number;    // consecutive ticks of clear sight to the target
   wasFalling: boolean;
   flareSkip: boolean;  // this fall, they're too distracted to flare
+  refuel: boolean;     // tank ran dry: stay grounded until it's full again
   path: { x: number; y: number }[];
   wpi: number;         // current waypoint index
   goalRight: boolean;  // patrolling toward the right edge?
@@ -725,7 +726,7 @@ export class GameRoom {
       id: this.nextId++,
       name: alias ? `(B) ${alias}` : this.uniqueName(`(B) Outlaw ${this.nextId}`),
       conn: null,
-      bot: { mx: 1, up: false, jump: false, nadeHold: 0, losTicks: 0, wasFalling: false, flareSkip: false, path: [], wpi: 0, goalRight: Math.random() < 0.5, stuck: 0, seq: 0 },
+      bot: { mx: 1, up: false, jump: false, nadeHold: 0, losTicks: 0, wasFalling: false, flareSkip: false, refuel: false, path: [], wpi: 0, goalRight: Math.random() < 0.5, stuck: 0, seq: 0 },
       state: blankState(loadout, this.randomNade()),
       kills: 0, deaths: 0, assists: 0, dmg: 0, recent: [],
       burnTicks: 0, burnBy: -1, blindTicks: 0,
@@ -824,8 +825,14 @@ export class GameRoom {
       }
     }
 
+    // out of gas: most of the time a bot settles down and lets the tank
+    // fill all the way before jetting again — sipping the trickle is how
+    // they used to hover-strand themselves mid-climb
+    if (!b.refuel && p.state.fuel <= 3) b.refuel = Math.random() < 0.8;
+    if (b.refuel && p.state.fuel >= FUEL_MAX) b.refuel = false;
+
     return {
-      seq: ++b.seq, mx: b.mx, up: b.up || flare, dn: false, jump: b.jump,
+      seq: ++b.seq, mx: b.mx, up: (b.up && !b.refuel) || flare, dn: false, jump: b.jump,
       sprint: false, slot: 0, aim,
       fire: fire && b.nadeHold === 0,
       reload: false,
