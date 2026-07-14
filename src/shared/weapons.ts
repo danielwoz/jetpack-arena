@@ -122,15 +122,15 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     muzzleLen: 54,
   },
   mk47: {
-    name: 'MUTANT MK47', role: '3-round bursts — click up to 300 bpm; hammer faster and it jams for 0.6 s',
+    name: 'MUTANT MK47', role: '2-round bursts — click up to 300 bpm; hammer faster and it jams for 0.6 s',
     damage: 34, pellets: 1, rpm: 960, spreadDeg: 1.2,
     speed: 6000, heatPerShot: 0.15, heatMax: 6.0, heatDecay: 3,
     mag: 30, reloadSec: 0.6, moveMult: 0.93,
     color: [1.0, 0.4, 0.9],
     muzzleLen: 50,
-    // 3 bullets per click; clicking faster than 300 bpm (< 12 ticks apart)
-    // stalls the action for 600 ms.
-    burst: { count: 3, interval: 4, minClickTicks: 12, stallTicks: 36 },
+    // 2 bullets per click at the same ~900 rpm cycle; clicking faster than
+    // 300 bpm (< 12 ticks apart) stalls the action for 600 ms.
+    burst: { count: 2, interval: 4, minClickTicks: 12, stallTicks: 36 },
   },
 };
 

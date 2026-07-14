@@ -7,6 +7,7 @@ interface ShotVoice {
   freq: number;    // bandpass center for the crack
   dur: number;     // decay seconds
   boom: number;    // low thump amount 0..1
+  metal?: boolean; // add ringing inharmonic partials (MK47 action clang)
 }
 
 const SHOT_VOICES: Partial<Record<WeaponId, ShotVoice>> = {
@@ -16,7 +17,7 @@ const SHOT_VOICES: Partial<Record<WeaponId, ShotVoice>> = {
   mac10: { freq: 2000, dur: 0.06, boom: 0.2 },
   rifle: { freq: 1400, dur: 0.12, boom: 0.4 },
   ak47: { freq: 1200, dur: 0.13, boom: 0.5 },
-  mk47: { freq: 1300, dur: 0.11, boom: 0.45 },
+  mk47: { freq: 1500, dur: 0.1, boom: 0.4, metal: true },
   m249: { freq: 1100, dur: 0.14, boom: 0.55 },
   shotgun: { freq: 700, dur: 0.22, boom: 0.8 },
   sniper: { freq: 500, dur: 0.35, boom: 1 },
@@ -140,6 +141,26 @@ export class GameAudio {
     og.connect(bus);
     osc.start(t);
     osc.stop(t + 0.12 + v.dur * 0.5);
+    if (v.metal) {
+      // metallic clang: inharmonic partials ringing off the action
+      for (const [f, g, d] of [[3100, 0.3, 0.05], [4700, 0.22, 0.04], [2050, 0.18, 0.08]] as const) {
+        const o = this.ctx!.createOscillator();
+        o.type = 'square';
+        o.frequency.value = f;
+        const bp = this.ctx!.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = f;
+        bp.Q.value = 16;
+        const mg = this.ctx!.createGain();
+        mg.gain.setValueAtTime(g, t);
+        mg.gain.exponentialRampToValueAtTime(0.001, t + d);
+        o.connect(bp);
+        bp.connect(mg);
+        mg.connect(bus);
+        o.start(t);
+        o.stop(t + d + 0.02);
+      }
+    }
   }
 
   // size 1 = frag; small terrain chips pass ~0.3
