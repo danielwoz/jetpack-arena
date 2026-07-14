@@ -98,7 +98,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   ak47: {
     name: 'AK-47', role: 'harder-hitting, slower, kickier than the M4A1',
-    damage: 32, pellets: 1, rpm: 430, spreadDeg: 1.1,
+    damage: 30, pellets: 1, rpm: 480, spreadDeg: 1.1,
     speed: 6400, heatPerShot: 0.3, heatMax: 6.0, heatDecay: 3,
     mag: 30, reloadSec: 0.58, moveMult: 0.94,
     color: [1.0, 0.55, 0.3],
@@ -123,7 +123,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   mk47: {
     name: 'MUTANT MK47', role: '2-round bursts — click up to 300 bpm; hammer faster and it jams for 0.6 s',
-    damage: 34, pellets: 1, rpm: 960, spreadDeg: 1.2,
+    damage: 32, pellets: 1, rpm: 960, spreadDeg: 1.2,
     speed: 6000, heatPerShot: 0.15, heatMax: 6.0, heatDecay: 3,
     mag: 30, reloadSec: 0.6, moveMult: 0.93,
     color: [1.0, 0.4, 0.9],
