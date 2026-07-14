@@ -119,6 +119,19 @@ export class World {
     return null;
   }
 
+  // movement ignores bullet channels: a body can never fit through them,
+  // and their scalloped remnants snag the collision box's corners
+  inHoleForBody(x: number, y: number): boolean {
+    const arr = this.grid.get(World.key(Math.floor(x / CELL), Math.floor(y / CELL)));
+    if (!arr) return false;
+    for (const h of arr) {
+      if (h.r < 14) continue;
+      const dx = x - h.x, dy = y - h.y;
+      if (dx * dx + dy * dy < h.r * h.r) return true;
+    }
+    return false;
+  }
+
   inHole(x: number, y: number): boolean {
     const arr = this.grid.get(World.key(Math.floor(x / CELL), Math.floor(y / CELL)));
     if (!arr) return false;

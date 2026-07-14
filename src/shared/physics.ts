@@ -11,20 +11,29 @@ import type { MapRect } from './map.ts';
 // movement collides as a full 56×56 square so small blast craters can't
 // swallow a player; hit detection still uses the slim 28×56 damage box
 const COLLIDE_HW = PLAYER_HH;
-const BODY_SX = [-COLLIDE_HW + 1, -COLLIDE_HW / 2, 0, COLLIDE_HW / 2, COLLIDE_HW - 1];
-const BODY_SY = [-PLAYER_HH + 1, -PLAYER_HH / 2, 0, PLAYER_HH / 2, PLAYER_HH - 1];
+// rounded-corner sample layout: the 4 extreme corners are inset diagonally
+// so cusp spikes between overlapping craters deflect the body instead of
+// hooking it
+const EDGE = COLLIDE_HW - 1;
+const MID = COLLIDE_HW / 2;
+const CORNER = COLLIDE_HW - 6;
+const BODY_PTS: readonly (readonly [number, number])[] = [
+  [-CORNER, -CORNER], [-MID, -EDGE], [0, -EDGE], [MID, -EDGE], [CORNER, -CORNER],
+  [-EDGE, -MID], [-MID, -MID], [0, -MID], [MID, -MID], [EDGE, -MID],
+  [-EDGE, 0], [-MID, 0], [0, 0], [MID, 0], [EDGE, 0],
+  [-EDGE, MID], [-MID, MID], [0, MID], [MID, MID], [EDGE, MID],
+  [-CORNER, CORNER], [-MID, EDGE], [0, EDGE], [MID, EDGE], [CORNER, CORNER],
+];
 
 function bodySolid(
   cx: number, cy: number, candidates: readonly Rect[], world: World,
 ): boolean {
-  for (const sy of BODY_SY) {
-    for (const sx of BODY_SX) {
-      const px = cx + sx;
-      const py = cy + sy;
-      for (const s of candidates) {
-        if (pointInSolid(s as MapRect, px, py)) {
-          if ((s as MapRect).ind || !world.inHole(px, py)) return true;
-        }
+  for (const [sx, sy] of BODY_PTS) {
+    const px = cx + sx;
+    const py = cy + sy;
+    for (const s of candidates) {
+      if (pointInSolid(s as MapRect, px, py)) {
+        if ((s as MapRect).ind || !world.inHoleForBody(px, py)) return true;
       }
     }
   }
@@ -74,6 +83,16 @@ export function collideMove(
           if (!bodySolid(nx, p.y - dh, near, world)) {
             p.x = nx;
             p.y -= dh;
+            stepped = true;
+            break;
+          }
+        }
+      } else {
+        // airborne: slip vertically past small crater lips instead of snagging
+        for (const dh of [-6, 6, -10, 10]) {
+          if (!bodySolid(nx, p.y + dh, near, world)) {
+            p.x = nx;
+            p.y += dh;
             stepped = true;
             break;
           }
