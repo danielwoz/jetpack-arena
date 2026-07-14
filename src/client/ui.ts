@@ -1242,6 +1242,7 @@ export class Ui {
       chip.className = 'namechip' + (this.nameInput.value.trim().toLowerCase() === entry.n.toLowerCase() ? ' active' : '');
       const label = document.createElement('span');
       label.textContent = entry.n;
+      label.title = `password: ${entry.p}`;
       label.addEventListener('click', () => {
         this.nameInput.value = entry.n;
         this.renderNameChips();
