@@ -95,6 +95,7 @@ async function preloadAssets(): Promise<void> {
 // straight from the warmed HTTP cache
 void preloadAssets().then(() => {
   ensureTextures(renderer);
+  ui.startServerBrowser();
   if (sessionStorage.getItem('rejoin')) {
     sessionStorage.removeItem('rejoin');
     ui.autoDeploy();
@@ -194,13 +195,13 @@ let remotes: RenderPlayer[] = [];
 const frameDts: number[] = [];
 let perfT = 0;
 
-let lastJoin: { name: string; loadout: Parameters<typeof Net.connect>[1]; nadeType: Parameters<typeof Net.connect>[2] } | null = null;
+let lastJoin: { name: string; loadout: Parameters<typeof Net.connect>[1]; nadeType: Parameters<typeof Net.connect>[2]; serverId?: string } | null = null;
 
-const doJoin = (name: string, loadout: Parameters<typeof Net.connect>[1], nadeType: Parameters<typeof Net.connect>[2], silent = false): void => {
-  Net.connect(name, loadout, nadeType)
+const doJoin = (name: string, loadout: Parameters<typeof Net.connect>[1], nadeType: Parameters<typeof Net.connect>[2], serverId?: string, silent = false): void => {
+  Net.connect(name, loadout, nadeType, serverId)
     .then((n) => {
       net = n;
-      lastJoin = { name, loadout, nadeType };
+      lastJoin = { name, loadout, nadeType, serverId };
       net.onClose = () => void reconnect();
       net.onSnap = onSnapshot;
       ui.hideDisconnected();
@@ -211,7 +212,7 @@ const doJoin = (name: string, loadout: Parameters<typeof Net.connect>[1], nadeTy
     });
 };
 
-ui.onJoin = (name, loadout, nadeType) => doJoin(name, loadout, nadeType);
+ui.onJoin = (name, loadout, nadeType, serverId) => doJoin(name, loadout, nadeType, serverId);
 
 // Connection lost: wait for the server to answer again, then either rejoin
 // silently (same build still deployed) or reload into the new build — the
@@ -238,7 +239,7 @@ async function reconnect(): Promise<void> {
     } catch { /* server still down — keep waiting */ }
     await new Promise((r) => setTimeout(r, 2000));
   }
-  if (lastJoin) doJoin(lastJoin.name, lastJoin.loadout, lastJoin.nadeType, true);
+  if (lastJoin) doJoin(lastJoin.name, lastJoin.loadout, lastJoin.nadeType, lastJoin.serverId, true);
 }
 
 ui.onRespawn = (loadout, nadeType) => {

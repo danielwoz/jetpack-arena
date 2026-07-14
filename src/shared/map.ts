@@ -183,11 +183,20 @@ export const SOLIDS: MapRect[] = [];
 export const SPAWN_POINTS: { x: number; y: number }[] = [];
 export let CURRENT_MAP: MapName = 'city';
 
+// map builds are memoized: with several rooms in one process the active map
+// context switches every room tick, so this has to be cheap
+const MAP_CACHE = new Map<MapName, { solids: MapRect[]; spawns: { x: number; y: number }[] }>();
+
 export function setMap(name: string): void {
   const map: MapName = name === 'pandora' ? 'pandora' : 'city';
-  const data = map === 'pandora'
-    ? buildPandora()
-    : { solids: CITY_SOLIDS, spawns: CITY_SPAWNS };
+  if (map === CURRENT_MAP && SOLIDS.length > 0) return;
+  let data = MAP_CACHE.get(map);
+  if (!data) {
+    data = map === 'pandora'
+      ? buildPandora()
+      : { solids: CITY_SOLIDS, spawns: CITY_SPAWNS };
+    MAP_CACHE.set(map, data);
+  }
   SOLIDS.length = 0;
   SOLIDS.push(...data.solids);
   SPAWN_POINTS.length = 0;

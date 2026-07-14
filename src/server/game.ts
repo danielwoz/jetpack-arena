@@ -173,6 +173,24 @@ export class GameRoom {
     return this.players.values();
   }
 
+  // one-line status for the lobby's server browser
+  status(): { humans: number; bots: number; players: number; max: number; map: string; roundSecs: number; full: boolean } {
+    let humans = 0;
+    let bots = 0;
+    for (const p of this.players.values()) {
+      if (p.bot) bots++;
+      else humans++;
+    }
+    return {
+      humans, bots,
+      players: this.players.size,
+      max: MAX_PLAYERS,
+      map: CURRENT_MAP,
+      roundSecs: Math.max(0, Math.round((this.roundEnd - this.tick) / TICK_RATE)),
+      full: this.players.size >= MAX_PLAYERS,
+    };
+  }
+
   start(): void {
     setMap(process.env.MAP ?? MAP_NAMES[Math.floor(Math.random() * MAP_NAMES.length)]);
 
@@ -628,6 +646,7 @@ export class GameRoom {
       }
     }
     void appendRoundStats({
+      serverName: process.env.SERVER_NAME ?? '',
       endedUnixMs: Date.now(),
       map: CURRENT_MAP,
       roundSeconds: Math.round((this.tick - this.roundStartTick) / TICK_RATE),

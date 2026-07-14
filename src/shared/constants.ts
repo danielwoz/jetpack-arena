@@ -99,7 +99,7 @@ export const ARMOR_PER_KILL = 10;
 export let RESPAWN_TICKS = secTicks(2);
 export let SPAWN_PROTECT_TICKS = secTicks(1);       // invulnerability after spawning
 export const MAX_RANGE = 3000;
-export const MAX_PLAYERS = 16;
+export const MAX_PLAYERS = 32;
 export const MAX_NAME_LEN = 16;
 
 export let PENDING_INPUT_CAP = secTicks(2);         // client force-resyncs past this unacked

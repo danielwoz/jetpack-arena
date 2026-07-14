@@ -14,6 +14,7 @@ message RoundStats {
   repeated GunStats guns = 6;  // server-wide per-weapon totals
   double cpu_avg_pct = 7;      // server process CPU, % of one core
   double cpu_peak_pct = 8;
+  string server_name = 9;      // which room instance the round ran on
 }
 
 message PlayerStats {

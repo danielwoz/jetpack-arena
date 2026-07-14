@@ -35,6 +35,7 @@ export interface PlayerRoundStats {
 }
 
 export interface RoundStats {
+  serverName: string;
   endedUnixMs: number;
   map: string;
   roundSeconds: number;
@@ -127,7 +128,7 @@ export function encodeRoundStats(r: RoundStats): Uint8Array {
     .uint(4, r.tickRate);
   for (const p of r.players) m.message(5, encodePlayer(p));
   for (const [w, g] of r.guns) m.message(6, encodeGun(w, g));
-  m.double(7, r.cpuAvgPct).double(8, r.cpuPeakPct);
+  m.double(7, r.cpuAvgPct).double(8, r.cpuPeakPct).string(9, r.serverName);
   const body = m.bytes();
   const framed = new Pb().varint(body.length).bytes();
   const out = new Uint8Array(framed.length + body.length);

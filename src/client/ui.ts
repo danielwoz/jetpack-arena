@@ -284,7 +284,7 @@ export class Ui {
   private padBindrowIndex = -1;
   private padControlsBtnIndex = -1;
 
-  onJoin: (name: string, loadout: Loadout, nadeType: NadeType) => void = () => {};
+  onJoin: (name: string, loadout: Loadout, nadeType: NadeType, serverId?: string) => void = () => {};
   onRespawn: (loadout: Loadout, nadeType: NadeType) => void = () => {};
   onCaptureChange: (capturing: boolean) => void = () => {};
 
@@ -1112,7 +1112,7 @@ export class Ui {
       localStorage.setItem('callsign', name);
       this.joinBtn.disabled = true;
       this.joinStatus.textContent = 'connecting…';
-      this.onJoin(name, [...this.loadout] as Loadout, this.nadeSel.nade);
+      this.onJoin(name, [...this.loadout] as Loadout, this.nadeSel.nade, this.selectedServer ?? undefined);
     });
 
     this.respawnBtn.addEventListener('click', () => {
@@ -1161,6 +1161,50 @@ export class Ui {
     this.death.classList.add('hidden');
     this.setPadDeployFocus(false);
     this.clearPickerHover(this.deathWeapons);
+  }
+
+  private selectedServer: string | null = null;
+  private serverPoll = 0;
+
+  startServerBrowser(): void {
+    const refresh = async (): Promise<void> => {
+      if (this.join.classList.contains('hidden')) return;
+      try {
+        const res = await fetch('/servers', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json() as { servers: { id: string; name: string; players: number; bots: number; max: number; map: string; roundSecs: number; full: boolean }[] };
+        this.renderServers(data.servers);
+      } catch { /* lobby unreachable — keep the old list */ }
+    };
+    void refresh();
+    clearInterval(this.serverPoll);
+    this.serverPoll = window.setInterval(() => void refresh(), 4000);
+  }
+
+  private renderServers(list: { id: string; name: string; players: number; bots: number; max: number; map: string; roundSecs: number; full: boolean }[]): void {
+    const box = el<HTMLDivElement>('serverlist');
+    if (list.length === 0) {
+      box.innerHTML = '<div class="srv-row srv-head">no servers up — try again shortly</div>';
+      return;
+    }
+    if (!this.selectedServer || !list.some((s) => s.id === this.selectedServer && !s.full)) {
+      this.selectedServer = list.find((s) => !s.full)?.id ?? null;
+    }
+    const mmss = (s: number): string =>
+      `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    box.innerHTML = '<div class="srv-row srv-head"><span>SERVER</span><span>PLAYERS</span><span>BOTS</span><span>ROUND</span><span>MAP</span></div>' +
+      list.map((s) =>
+        `<div class="srv-row${s.id === this.selectedServer ? ' selected' : ''}${s.full ? ' full' : ''}" data-sid="${s.id}">` +
+        `<span>${s.name}</span><span>${s.players}/${s.max}</span><span>${s.bots}</span><span>${mmss(s.roundSecs)}</span><span>${s.map}</span></div>`,
+      ).join('');
+    for (const row of box.querySelectorAll<HTMLDivElement>('.srv-row[data-sid]')) {
+      row.addEventListener('click', () => {
+        if (row.classList.contains('full')) return;
+        this.selectedServer = row.dataset.sid ?? null;
+        for (const r2 of box.querySelectorAll('.srv-row')) r2.classList.remove('selected');
+        row.classList.add('selected');
+      });
+    }
   }
 
   showDisconnected(): void {

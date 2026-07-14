@@ -4,9 +4,13 @@ import { world } from './world.ts';
 import { applyTune } from '../shared/tuning.ts';
 import { setMap } from '../shared/map.ts';
 
-function serverUrl(): string {
+function serverUrl(serverId?: string): string {
+  const params = new URLSearchParams();
   const lag = new URLSearchParams(location.search).get('lag');
-  const query = lag ? `?lag=${encodeURIComponent(lag)}` : '';
+  if (lag) params.set('lag', lag);
+  if (serverId) params.set('s', serverId);
+  const qs = params.toString();
+  const query = qs ? `?${qs}` : '';
   if (import.meta.env.DEV) {
     return `ws://${location.hostname}:8090${query}`;
   }
@@ -26,10 +30,10 @@ export class Net {
   // each snapshot's tick to absorb jitter.
   private estTick = -1;
 
-  static connect(name: string, loadout: Loadout, nadeType: NadeType): Promise<Net> {
+  static connect(name: string, loadout: Loadout, nadeType: NadeType, serverId?: string): Promise<Net> {
     return new Promise((resolve, reject) => {
       const net = new Net();
-      const ws = new WebSocket(serverUrl());
+      const ws = new WebSocket(serverUrl(serverId));
       net.ws = ws;
       let welcomed = false;
 
