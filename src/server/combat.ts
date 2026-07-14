@@ -49,10 +49,14 @@ export interface CombatWorld {
 export function kill(world: CombatWorld, attacker: CombatPlayer, victim: CombatPlayer, weapon: PlayerState['weapon'] | 'grenade' | 'fall' | 'fire'): void {
   if (attacker !== victim) {
     attacker.state.armor = Math.min(MAX_ARMOR, attacker.state.armor + TUNE.armorPerKill);
-    attacker.state.nades = Math.min(MAX_NADES, attacker.state.nades + TUNE.nadesPerKill);
+    // grenade bounty only tops up a light pouch — never stacks past 2
+    if (attacker.state.nades < 2) {
+      attacker.state.nades = Math.min(MAX_NADES, attacker.state.nades + TUNE.nadesPerKill);
+    }
     attacker.state.magsS[0] = Math.min(TUNE.magsMax, attacker.state.magsS[0] + 1);
     attacker.state.magsS[1] = Math.min(TUNE.magsMax, attacker.state.magsS[1] + 1);
-    attacker.state.bandages = Math.min(9, attacker.state.bandages + TUNE.bandagesPerKill);
+    // bandages never exceed the spawn kit
+    attacker.state.bandages = Math.min(TUNE.bandagesSpawn, attacker.state.bandages + TUNE.bandagesPerKill);
   }
   victim.state.alive = false;
   victim.deaths++;
