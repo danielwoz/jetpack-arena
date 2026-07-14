@@ -88,7 +88,7 @@ export const NADE_SHOCK_R = NADE_RADIUS * 2; // shockwave shoves airborne player
 export const NADE_SHOCK_PUSH = 4400;         // max shove, units/s at the center
 export const NADE_HOLE_R = 42.5;            // crater carved in destructible terrain
 export const NADE_BOUNCE = 0.45;
-export const MAX_HOLES = 1_000_000;
+export const MAX_HOLES = 4000;          // oldest craters heal once the list is full
 
 export const MAX_HP = 100;
 export const MAX_ARMOR = 100;
