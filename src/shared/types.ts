@@ -138,7 +138,7 @@ export type C2S =
   | { t: 'pong'; id: number };
 
 export type S2C =
-  | { t: 'welcome'; id: number; tick: number; holes: Hole[]; map?: string; tune?: unknown }
+  | { t: 'welcome'; id: number; tick: number; tickRate?: number; holes: Hole[]; map?: string; tune?: unknown }
   | { t: 'tune'; data: unknown }
   | Snapshot
   | { t: 'ping'; id: number }

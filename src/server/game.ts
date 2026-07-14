@@ -8,6 +8,7 @@ import {
   NADE_HOLE_R, NADE_SHOCK_PUSH, NADE_SHOCK_R, NADE_THROW_SPEED, NAPALM_DIRECT_TICKS, PING_INTERVAL_TICKS,
   PLAYER_H, PLAYER_HH, PLAYER_HW, ROUND_TICKS, SNAPSHOT_EVERY, SPAWN_PROTECT_TICKS,
   TICK_MS, TICK_RATE, WORLD_H, WORLD_W,
+  secTicks,
 } from '../shared/constants.ts';
 import { CURRENT_MAP, MAP_NAMES, SOLIDS, SPAWN_POINTS, setMap } from '../shared/map.ts';
 import { rayVsSolids } from '../shared/physics.ts';
@@ -151,7 +152,7 @@ export class GameRoom {
   private nextId = 1;
   private nextPingId = 1;
   private nextNadeId = 1;
-  private roundLen = (Number(process.env.ROUND_SECS) || 0) * 60 || ROUND_TICKS;
+  private roundLen = Number(process.env.ROUND_SECS) > 0 ? secTicks(Number(process.env.ROUND_SECS)) : ROUND_TICKS;
   private roundEnd = this.roundLen;
   private interEnd = 0;      // >0: intermission until this tick
   private botAcc = 0.2;        // fraction of bot shots aimed true
@@ -202,7 +203,7 @@ export class GameRoom {
         clearTimeout(joinDeadline);
         player = this.createPlayer(conn, name, loadout, nadeType);
         conn.send(JSON.stringify({
-          t: 'welcome', id: player.id, tick: this.tick, holes: this.world.holes,
+          t: 'welcome', id: player.id, tick: this.tick, tickRate: TICK_RATE, holes: this.world.holes,
           map: CURRENT_MAP,
           tune: tuneSnapshot(),
         }));
@@ -335,7 +336,7 @@ export class GameRoom {
       for (const p of this.players.values()) p.state.prime = 0;
     }
 
-    if (this.tick % 60 === 0) this.manageBots();
+    if (this.tick % TICK_RATE === 0) this.manageBots();
 
     // record positions entering this tick BEFORE applying inputs, so a shot
     // resolved this tick can rewind to any tick up to and including this one
@@ -368,7 +369,7 @@ export class GameRoom {
         }
         const res = stepPlayer(p.state, cmd, SOLIDS, this.world);
         if (res.fired) fireBullets(this, p, cmd.rt, this.bullets, cmd.zoom);
-        if (res.threw) this.throwNade(p, NADES[p.state.nadeType].fuse - res.primeTicks);
+        if (res.threw) this.throwNade(p, secTicks(NADES[p.state.nadeType].fuseSec) - res.primeTicks);
         if (res.handBoom) this.detonate(p.state.x, p.state.y, p, p.state.nadeType);
         if (res.fellDmg > 0) {
           this.events.push({
@@ -388,7 +389,7 @@ export class GameRoom {
       if (!p.state.alive && p.state.prime > 0) {
         this.nades.push({
           id: this.nextNadeId++, x: p.state.x, y: p.state.y, vx: 0, vy: 0,
-          boomAt: this.tick + NADES[p.state.nadeType].fuse - p.state.prime,
+          boomAt: this.tick + secTicks(NADES[p.state.nadeType].fuseSec) - p.state.prime,
           owner: p.id, kind: p.state.nadeType,
         });
         p.state.prime = 0;
@@ -768,7 +769,7 @@ export class GameRoom {
       near = bd < 900;
     }
     if (b.nadeHold === 0 && near && Math.random() < 0.002) {
-      b.nadeHold = 40 + Math.floor(Math.random() * 60);
+      b.nadeHold = secTicks(2 / 3) + Math.floor(Math.random() * TICK_RATE);
     }
     if (b.nadeHold > 0) b.nadeHold--;
 
@@ -801,7 +802,7 @@ export class GameRoom {
         b.jump = p.state.onGround && Math.abs(p.state.vx) < 20 && b.mx !== 0;
         // going nowhere: give up on this path and replan
         if (Math.abs(p.state.vx) < 8 && Math.abs(p.state.vy) < 8) {
-          if (++b.stuck > 120) { b.path = []; b.wpi = 0; b.stuck = 0; }
+          if (++b.stuck > secTicks(2)) { b.path = []; b.wpi = 0; b.stuck = 0; }
         } else b.stuck = 0;
       }
     }

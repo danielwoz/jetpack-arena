@@ -3,9 +3,9 @@ import type { WeaponId } from './types.ts';
 
 export interface BurstCfg {
   count: number;          // bullets per trigger pull
-  interval: number;       // ticks between burst bullets
-  minClickTicks: number;  // clicking faster than this jams the action
-  stallTicks: number;     // jam duration
+  intervalSec: number;    // seconds between burst bullets
+  minClickSec: number;    // clicking faster than this jams the action
+  stallSec: number;       // jam duration
 }
 
 export interface WeaponDef {
@@ -129,8 +129,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     color: [1.0, 0.4, 0.9],
     muzzleLen: 50,
     // 2 bullets per click at the same ~900 rpm cycle; clicking faster than
-    // 300 bpm (< 12 ticks apart) stalls the action for 600 ms.
-    burst: { count: 2, interval: 4, minClickTicks: 12, stallTicks: 36 },
+    // 300 bpm stalls the action for 600 ms.
+    burst: { count: 2, intervalSec: 1 / 15, minClickSec: 0.2, stallSec: 0.6 },
   },
 };
 
@@ -180,10 +180,10 @@ export function validLoadout(l: unknown): l is [WeaponId, WeaponId, WeaponId] {
 }
 
 // grenade types: fuse runs from the moment priming starts
-export const NADES: Record<import('./types.ts').NadeType, { name: string; fuse: number; throwMult: number; desc: string }> = {
-  frag: { name: 'FRAG', fuse: 180, throwMult: 2.01, desc: '95 dmg center → 62 at the edge; carves craters' },
-  flash: { name: 'FLASHBANG', fuse: 60, throwMult: 2, desc: 'whites out nearby screens up to 4 s; flies far' },
-  napalm: { name: 'NAPALM', fuse: 60, throwMult: 1, desc: 'splashes fire that burns 20 hp/s' },
+export const NADES: Record<import('./types.ts').NadeType, { name: string; fuseSec: number; throwMult: number; desc: string }> = {
+  frag: { name: 'FRAG', fuseSec: 3, throwMult: 2.01, desc: '95 dmg center → 62 at the edge; carves craters' },
+  flash: { name: 'FLASHBANG', fuseSec: 1, throwMult: 2, desc: 'whites out nearby screens up to 4 s; flies far' },
+  napalm: { name: 'NAPALM', fuseSec: 1, throwMult: 1, desc: 'splashes fire that burns 20 hp/s' },
 };
 
 export function isNadeType(n: unknown): n is import('./types.ts').NadeType {

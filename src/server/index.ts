@@ -1,7 +1,12 @@
 import http from 'node:http';
 import { WebSocketServer } from 'ws';
-import { GameRoom } from './game.ts';
-import { serveStatic } from './static.ts';
+import { setTickRate } from '../shared/constants.ts';
+
+// tick rate is set before anything simulation-shaped is constructed
+if (process.env.TICK) setTickRate(Number(process.env.TICK));
+
+const { GameRoom } = await import('./game.ts');
+const { serveStatic } = await import('./static.ts');
 
 const port = Number(process.env.PORT) || 8090;
 

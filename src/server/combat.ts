@@ -2,7 +2,7 @@ import {
   ARMOR_PER_KILL, DT, GRAVITY, HEADSHOT_MULT, HEAD_ZONE, LAGCOMP_MAX_TICKS,
   LEG_MULT, LEG_ZONE, MAX_ARMOR, MAX_MAGS, MAX_NADES, MAX_RANGE,
   NADE_RADIUS, PLAYER_H, PLAYER_HH, PLAYER_HW, PLAYER_W,
-  RESPAWN_TICKS, VIEW_H,
+  RESPAWN_TICKS, VIEW_H, secTicks,
 } from '../shared/constants.ts';
 import { applyDamage } from '../shared/step.ts';
 import { TUNE } from '../shared/tuning.ts';
@@ -28,7 +28,7 @@ export interface CombatPlayer {
   protUntil: number;
 }
 
-const ASSIST_WINDOW = 300;   // ticks (5 s)
+const ASSIST_WINDOW_SEC = 5;
 const ASSIST_MIN_DMG = 10;
 
 // remember who softened this victim up (for assist credit)
@@ -62,7 +62,7 @@ export function kill(world: CombatWorld, attacker: CombatPlayer, victim: CombatP
   // assist credit: ≥10 damage within the last 5 s, not the killer
   const totals = new Map<number, number>();
   for (const r of victim.recent) {
-    if (r.tick >= world.tick - ASSIST_WINDOW && r.id !== attacker.id) {
+    if (r.tick >= world.tick - secTicks(ASSIST_WINDOW_SEC) && r.id !== attacker.id) {
       totals.set(r.id, (totals.get(r.id) ?? 0) + r.dmg);
     }
   }

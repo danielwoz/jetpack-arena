@@ -147,9 +147,9 @@ function buildLoadoutPicker(container: HTMLElement, loadout: Loadout, sel: { nad
         const card = document.createElement('div');
         card.className = 'weapon-card' + (sel.nade === kind ? ' selected' : '');
         card.title = weaponTooltip(n.name, n.desc);
-        card.setAttribute('aria-label', `${n.name}. ${n.desc}. Fuse ${(n.fuse / 60).toFixed(0)} seconds.`);
+        card.setAttribute('aria-label', `${n.name}. ${n.desc}. Fuse ${n.fuseSec.toFixed(0)} seconds.`);
         card.innerHTML =
-          `<div class="weapon-card-main"><div class="wname">${n.name}</div><div class="wmeta">FUSE ${(n.fuse / 60).toFixed(0)}s · COUNT 3</div></div>` +
+          `<div class="weapon-card-main"><div class="wname">${n.name}</div><div class="wmeta">FUSE ${n.fuseSec.toFixed(0)}s · COUNT 3</div></div>` +
           `<div class="weapon-icon nade-icon nade-${kind}" aria-hidden="true"><span class="nade-cap"></span><span class="nade-lever"></span></div>`;
         card.addEventListener('click', () => {
           for (const c of cards.values()) c.classList.remove('selected');

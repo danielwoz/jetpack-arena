@@ -1,4 +1,4 @@
-import { FUEL_MAX, MAX_ARMOR, MAX_HP, WORLD_H, WORLD_W } from '../shared/constants.ts';
+import { BANDAGE_TICKS, TICK_RATE, FUEL_MAX, MAX_ARMOR, MAX_HP, WORLD_H, WORLD_W } from '../shared/constants.ts';
 import { SOLIDS } from '../shared/map.ts';
 import { WEAPONS, reloadTicks } from '../shared/weapons.ts';
 import type { NetPlayer, PlayerState } from '../shared/types.ts';
@@ -91,7 +91,7 @@ export class Hud {
     }
 
     if (state.bandage > 0) {
-      const pct = Math.round((1 - state.bandage / 60) * 100);
+      const pct = Math.round((1 - state.bandage / BANDAGE_TICKS) * 100);
       this.healText.textContent = `BANDAGING ${pct}%`;
       this.healText.classList.remove('hidden');
     } else {
@@ -173,7 +173,7 @@ export class Hud {
   }
 
   setRound(ticksLeft: number): void {
-    const s = Math.max(0, Math.ceil(ticksLeft / 60));
+    const s = Math.max(0, Math.ceil(ticksLeft / TICK_RATE));
     const mm = String(Math.floor(s / 60)).padStart(2, '0');
     const ss = String(s % 60).padStart(2, '0');
     this.roundEl.textContent = `${mm}:${ss}`;
@@ -241,7 +241,7 @@ export class Hud {
     }
     this.scoreboard.classList.remove('hidden');
     const banner = interTicks > 0
-      ? `<div class="nextround">NEXT ROUND IN ${Math.max(0, Math.ceil(interTicks / 60))}</div>`
+      ? `<div class="nextround">NEXT ROUND IN ${Math.max(0, Math.ceil(interTicks / TICK_RATE))}</div>`
       : '';
     const rows = [...players]
       .sort((a, b) => b.kills - a.kills || b.dmg - a.dmg || a.deaths - b.deaths)

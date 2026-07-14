@@ -1,4 +1,4 @@
-import { FLASH_BLIND_SECS, FLASH_RADIUS, PLAYER_HH, TICK_MS } from '../shared/constants.ts';
+import { BANDAGE_TICKS, FLASH_BLIND_SECS, FLASH_RADIUS, PLAYER_HH, TICK_MS, secTicks } from '../shared/constants.ts';
 import { clamp, lerp } from '../shared/math.ts';
 import { NADES, WEAPONS, reloadTicks, spreadRad } from '../shared/weapons.ts';
 import { TUNE } from '../shared/tuning.ts';
@@ -546,9 +546,9 @@ function render(dtSec: number, alpha: number): void {
         jetD: st.jetD,
         priming: st.prime > 0,
         healing: st.bandage > 0,
-        bandageT: st.bandage > 0 ? 1 - st.bandage / 60 : 0,
+        bandageT: st.bandage > 0 ? 1 - st.bandage / BANDAGE_TICKS : 0,
         reloadT: st.reload > 0 ? 1 - st.reload / reloadTicks(st.weapon) : 0,
-        primeT: st.prime > 0 ? st.prime / NADES[st.nadeType].fuse : 0,
+        primeT: st.prime > 0 ? st.prime / secTicks(NADES[st.nadeType].fuseSec) : 0,
         burning: netSelf?.burn ?? false,
         dizzy: netSelf?.dizzy ?? false,
         vx: st.vx,

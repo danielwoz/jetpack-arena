@@ -1,4 +1,4 @@
-import { INTERP_DELAY_TICKS, TICK_MS } from '../shared/constants.ts';
+import { setTickRate, INTERP_DELAY_TICKS, TICK_MS } from '../shared/constants.ts';
 import type { C2S, InputCmd, Loadout, NadeType, S2C, Snapshot } from '../shared/types.ts';
 import { world } from './world.ts';
 import { applyTune } from '../shared/tuning.ts';
@@ -44,6 +44,7 @@ export class Net {
         try { msg = JSON.parse(ev.data as string) as S2C; } catch { return; }
         switch (msg.t) {
           case 'welcome':
+            if (msg.tickRate) setTickRate(msg.tickRate);
             applyTune(msg.tune);
             net.theme = msg.map ?? 'city';
             setMap(net.theme);

@@ -5,6 +5,7 @@ import {
   JET_DOWN_ACCEL, JUMP_SPEED, MAX_DIVE_SPEED, MAX_FALL_SPEED, MAX_HP, MAX_RUN,
   MAX_UP_SPEED, OVERDRIVE_DRAIN_MULT, OVERDRIVE_THRUST_MULT,
   OVERDRIVE_UP_SPEED, PLAYER_HH, RUN_ACCEL, SPRINT_MULT, SWITCH_TICKS, WORLD_H,
+  secTicks,
 } from './constants.ts';
 import { SPAWN_POINTS } from './map.ts';
 import { collideMove } from './physics.ts';
@@ -170,7 +171,7 @@ export function stepPlayer(
     }
   } else if (cmd.nade) {
     p.prime++;
-    if (p.prime >= NADES[p.nadeType].fuse) {
+    if (p.prime >= secTicks(NADES[p.nadeType].fuseSec)) {
       p.prime = 0;
       p.nadeLatch = true;          // require a fresh E press after a cook-off
       result.handBoom = true;
@@ -196,8 +197,8 @@ export function stepPlayer(
     if (p.stall > 0) p.stall--;
     if (p.burstCd > 0) p.burstCd--;
     if (click && p.burst === 0 && p.stall === 0 && canFire) {
-      if (p.sinceBurst < w.burst.minClickTicks) {
-        p.stall = w.burst.stallTicks;
+      if (p.sinceBurst < secTicks(w.burst.minClickSec)) {
+        p.stall = secTicks(w.burst.stallSec);
       } else {
         p.burst = w.burst.count;
         p.burstCd = 0;
@@ -207,7 +208,7 @@ export function stepPlayer(
     if (p.burst > 0 && p.burstCd === 0) {
       if (canFire) {
         p.ammo--;
-        p.burstCd = w.burst.interval;
+        p.burstCd = secTicks(w.burst.intervalSec);
         p.burst--;
         if (!p.onGround) p.heat = Math.min(w.heatMax, (p.heat + w.heatPerShot) * 1.3);
         if (p.ammo === 0) {
