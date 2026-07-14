@@ -157,8 +157,6 @@ export class GameRoom {
   private roundLen = Number(process.env.ROUND_SECS) > 0 ? secTicks(Number(process.env.ROUND_SECS)) : ROUND_TICKS;
   private roundEnd = this.roundLen;
   private interEnd = 0;      // >0: intermission until this tick
-  private botAcc = 0.2;        // fraction of bot shots aimed true
-  private botReactTicks = 48;  // sight time before firing (48 = 800 ms)
 
   allPlayers(): Iterable<ServerPlayer> {
     return this.players.values();
@@ -590,24 +588,20 @@ export class GameRoom {
     return [pick(SLOT_OPTIONS[0]), pick(SLOT_OPTIONS[1]), pick(SLOT_OPTIONS[2])];
   }
 
-  // Keep the arena populated: at least MIN_PLAYERS combatants, bots making
-  // up the difference and rotating out one per second as humans join.
-  // difficulty tracks the humans' average K/D this round: easy (20% accuracy,
-  // 800 ms reaction) at K/D <= 1, very hard (60%, 400 ms) at K/D >= 5
-  private updateBotAim(): void {
-    let sum = 0;
-    let humans = 0;
-    for (const p of this.players.values()) {
-      if (p.bot) continue;
-      humans++;
-      sum += p.kills / Math.max(1, p.deaths);
+  // Bot skill is per-target: against another bot they fight at full
+  // difficulty; against a human the same K/D formula applies, but scaled to
+  // THAT player's round: easy (20% accuracy, 800 ms reaction) at K/D <= 1,
+  // very hard (60%, 400 ms) at K/D >= 5
+  private skillFor(target: ServerPlayer | null): { acc: number; reactTicks: number } {
+    let t = 1;
+    if (target && !target.bot) {
+      const kd = target.kills / Math.max(1, target.deaths);
+      const span = Math.max(0.01, TUNE.botKdHard - TUNE.botKdEasy);
+      t = Math.min(1, Math.max(0, (kd - TUNE.botKdEasy) / span));
     }
-    const kd = humans > 0 ? sum / humans : 0;
-    const span = Math.max(0.01, TUNE.botKdHard - TUNE.botKdEasy);
-    const t = Math.min(1, Math.max(0, (kd - TUNE.botKdEasy) / span));
-    this.botAcc = TUNE.botAccEasy + (TUNE.botAccHard - TUNE.botAccEasy) * t;
+    const acc = TUNE.botAccEasy + (TUNE.botAccHard - TUNE.botAccEasy) * t;
     const ms = TUNE.botReactMsEasy + (TUNE.botReactMsHard - TUNE.botReactMsEasy) * t;
-    this.botReactTicks = Math.max(1, Math.round(ms / TICK_MS));
+    return { acc, reactTicks: Math.max(1, Math.round(ms / TICK_MS)) };
   }
 
   // ---- bot navigation: coarse grid + A*, bots patrol map edge to edge
@@ -701,7 +695,6 @@ export class GameRoom {
 
   private manageBots(): void {
     if (process.env.NOBOTS) return;
-    this.updateBotAim();
     let humans = 0;
     const bots: ServerPlayer[] = [];
     for (const p of this.players.values()) {
@@ -750,6 +743,7 @@ export class GameRoom {
     let fire = false;
     let near = false;
     let bd = Infinity, bx = 0, by = 0, tvx = 0, tvy = 0;
+    let bt: ServerPlayer | null = null;
     for (const o of this.players.values()) {
       if (o.id === p.id || !o.state.alive) continue;
       // fresh human spawns get a 3 s grace period from bots
@@ -759,14 +753,15 @@ export class GameRoom {
       if (Math.abs(o.state.x - p.state.x) > 1150) continue;
       if (Math.abs(o.state.y - p.state.y) > 640) continue;
       const d = dist(p.state.x, p.state.y, o.state.x, o.state.y);
-      if (d < bd) { bd = d; bx = o.state.x; by = o.state.y; tvx = o.state.vx; tvy = o.state.vy; }
+      if (d < bd) { bd = d; bx = o.state.x; by = o.state.y; tvx = o.state.vx; tvy = o.state.vy; bt = o; }
     }
     if (bd < Infinity) {
       // fast movers are hard to track: accuracy drops by up to 75% against
       // a target at full sideways sprint-jet speed
       const tSpeed = Math.hypot(tvx, tvy);
       const evade = Math.min(1, tSpeed / (MAX_RUN * SPRINT_MULT));
-      const acc = this.botAcc * (1 - 0.75 * evade);
+      const skill = this.skillFor(bt);
+      const acc = skill.acc * (1 - 0.75 * evade);
       // aim at the lower torso — bots never go for the head. acc of the
       // shots track true; the rest are flung wide.
       const miss = Math.random() < acc ? 0.02 : 0.12 + Math.random() * 0.22;
@@ -782,7 +777,7 @@ export class GameRoom {
       }
       // fire only after the difficulty-scaled sight time, never while flashed
       b.losTicks = clear ? b.losTicks + 1 : 0;
-      fire = clear && b.losTicks >= this.botReactTicks && p.blindTicks === 0
+      fire = clear && b.losTicks >= skill.reactTicks && p.blindTicks === 0
         && Math.random() < 0.55;
       near = bd < 900;
     }
