@@ -191,6 +191,8 @@ let started = false;
 let wasAlive = false;
 let lastKillerName: string | null = null;
 let remotes: RenderPlayer[] = [];
+const frameDts: number[] = [];
+let perfT = 0;
 
 let lastJoin: { name: string; loadout: Parameters<typeof Net.connect>[1]; nadeType: Parameters<typeof Net.connect>[2] } | null = null;
 
@@ -443,6 +445,19 @@ function frame(now: number): void {
     fps = (fpsFrames * 1000) / fpsT;
     fpsFrames = 0;
     fpsT = 0;
+  }
+
+  // frame-time sampling for the server's round statistics
+  frameDts.push(elapsed);
+  perfT += elapsed;
+  if (perfT >= 30000 && net && frameDts.length > 60) {
+    const dts = [...frameDts].sort((a, b) => a - b);
+    const best = 1000 / Math.max(1, dts[0]);
+    const avg = 1000 / (dts.reduce((s, v) => s + v, 0) / dts.length);
+    const low1 = 1000 / Math.max(1, dts[Math.min(dts.length - 1, Math.floor(dts.length * 0.99))]);
+    net.sendPerf(best, avg, low1);
+    frameDts.length = 0;
+    perfT = 0;
   }
 
   renderer.resize();

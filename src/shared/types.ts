@@ -134,6 +134,7 @@ export type C2S =
   | { t: 'admin'; data: unknown }
   | { t: 'join'; name: string; loadout: Loadout; nadeType: NadeType }
   | { t: 'in'; cmd: InputCmd }
+  | { t: 'perf'; best: number; avg: number; low1: number }
   | { t: 'respawn'; loadout: Loadout; nadeType: NadeType }
   | { t: 'pong'; id: number };
 

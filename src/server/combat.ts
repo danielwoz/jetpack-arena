@@ -13,6 +13,8 @@ import { WEAPONS, falloffMult, spreadRad } from '../shared/weapons.ts';
 import type { GameEvent, PlayerState } from '../shared/types.ts';
 import type { World } from '../shared/world.ts';
 import type { LagComp } from './lagcomp.ts';
+import { gunStat } from './stats.ts';
+import type { GunStats } from './stats.ts';
 
 export interface CombatPlayer {
   id: number;
@@ -26,6 +28,7 @@ export interface CombatPlayer {
   respawnAt: number;
   wantsRespawn: boolean;
   protUntil: number;
+  gunStats: Map<string, GunStats>;
 }
 
 const ASSIST_WINDOW_SEC = 5;
@@ -48,6 +51,7 @@ export interface CombatWorld {
 
 export function kill(world: CombatWorld, attacker: CombatPlayer, victim: CombatPlayer, weapon: PlayerState['weapon'] | 'grenade' | 'fall' | 'fire'): void {
   if (attacker !== victim) {
+    gunStat(attacker.gunStats, weapon).kills++;
     attacker.state.armor = Math.min(MAX_ARMOR, attacker.state.armor + TUNE.armorPerKill);
     // grenade bounty only tops up a light pouch — never stacks past 2
     if (attacker.state.nades < 2) {
@@ -228,7 +232,10 @@ function hitPlayer(world: CombatWorld, b: Bullet, victim: CombatPlayer, hitY: nu
   dmg = Math.max(1, Math.round(dmg));
   applyDamage(victim.state, dmg);
   const shooter = [...world.allPlayers()].find((p) => p.id === b.owner) ?? null;
-  if (shooter && shooter.id !== victim.id) shooter.dmg += dmg;
+  if (shooter && shooter.id !== victim.id) {
+    shooter.dmg += dmg;
+    gunStat(shooter.gunStats, b.weapon).hits++;
+  }
   noteDamage(victim, b.owner, dmg, world.tick);
   world.events.push({
     e: 'hit', victim: victim.id, attacker: b.owner, dmg,

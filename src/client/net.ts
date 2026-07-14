@@ -95,6 +95,10 @@ export class Net {
     this.send({ t: 'admin', data });
   }
 
+  sendPerf(best: number, avg: number, low1: number): void {
+    this.send({ t: 'perf', best, avg, low1 });
+  }
+
   sendRespawn(loadout: Loadout, nadeType: NadeType): void {
     this.send({ t: 'respawn', loadout, nadeType });
   }

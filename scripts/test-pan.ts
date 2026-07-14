@@ -19,7 +19,7 @@ function makePlayer(id: number, x: number, y: number, weapon: WeaponId, aim: num
   };
   return {
     id, name: `p${id}`, state, kills: 0, deaths: 0, assists: 0, dmg: 0,
-    recent: [], respawnAt: 0, wantsRespawn: false, protUntil: 0,
+    recent: [], respawnAt: 0, wantsRespawn: false, protUntil: 0, gunStats: new Map(),
   };
 }
 

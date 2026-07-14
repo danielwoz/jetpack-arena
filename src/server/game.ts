@@ -15,6 +15,8 @@ import { rayVsSolids } from '../shared/physics.ts';
 import { dist } from '../shared/math.ts';
 import { applyDamage, stepPlayer } from '../shared/step.ts';
 import { TUNE, applyTune, tuneSnapshot } from '../shared/tuning.ts';
+import { appendRoundStats, gunStat } from './stats.ts';
+import type { GunStats, PlayerRoundStats } from './stats.ts';
 import { DEFAULT_LOADOUT, NADES, SLOT_OPTIONS, WEAPONS, isNadeType, validLoadout } from '../shared/weapons.ts';
 import { World } from '../shared/world.ts';
 import type { GameEvent, InputCmd, Loadout, NadeType, NetFire, NetNade, NetPlayer, PlayerState, WeaponId } from '../shared/types.ts';
@@ -81,6 +83,11 @@ interface ServerPlayer {
   respawnNade: NadeType;
   protUntil: number;
   lastSpawnTick: number;
+  jetUp: number;       // ticks of plain jet thrust this round
+  jetOd: number;       // ticks of overdrive thrust
+  jetDive: number;     // ticks of powered dive
+  gunStats: Map<string, GunStats>;
+  fps: { best: number; avg: number; low1: number };
   rtt: number;
   pings: Map<number, number>;   // outstanding ping id → sent-at ms
 }
@@ -233,6 +240,11 @@ export class GameRoom {
             player.queue.push(sanitizeCmd(msg.cmd));
           }
           break;
+        case 'perf':
+          if ([msg.best, msg.avg, msg.low1].every((v) => Number.isFinite(v) && v >= 0 && v < 100000)) {
+            player.fps = { best: msg.best, avg: msg.avg, low1: msg.low1 };
+          }
+          break;
         case 'respawn':
           if (validLoadout(msg.loadout)) {
             player.respawnLoadout = msg.loadout;
@@ -289,6 +301,7 @@ export class GameRoom {
       queue: [], lastSeq: 0, lastQueuedSeq: 0, lastCmd: idleCmd(),
       respawnAt: 0, wantsRespawn: false, respawnLoadout: loadout, respawnNade: nadeType,
       protUntil: 0, lastSpawnTick: 0, rtt: 0, pings: new Map(),
+      jetUp: 0, jetOd: 0, jetDive: 0, gunStats: new Map(), fps: { best: 0, avg: 0, low1: 0 },
     };
     this.players.set(p.id, p);
     this.spawn(p, loadout, nadeType);
@@ -356,7 +369,10 @@ export class GameRoom {
       for (const p of this.players.values()) p.state.prime = 0;
     }
 
-    if (this.tick % TICK_RATE === 0) this.manageBots();
+    if (this.tick % TICK_RATE === 0) {
+      this.manageBots();
+      this.sampleCpu();
+    }
 
     // record positions entering this tick BEFORE applying inputs, so a shot
     // resolved this tick can rewind to any tick up to and including this one
@@ -390,8 +406,13 @@ export class GameRoom {
         const res = stepPlayer(p.state, cmd, SOLIDS, this.world);
         if (res.fired) {
           fireBullets(this, p, cmd.rt, this.bullets, cmd.zoom);
+          gunStat(p.gunStats, p.state.weapon).shots++;
           // opening fire forfeits what's left of spawn protection
           p.protUntil = Math.min(p.protUntil, this.tick);
+        }
+        if (p.state.alive) {
+          if (cmd.dn) p.jetDive++;
+          else if (cmd.up) { if (cmd.sprint) p.jetOd++; else p.jetUp++; }
         }
         if (res.threw) this.throwNade(p, secTicks(NADES[p.state.nadeType].fuseSec) - res.primeTicks);
         if (res.handBoom) this.detonate(p.state.x, p.state.y, p, p.state.nadeType);
@@ -568,7 +589,61 @@ export class GameRoom {
   }
 
   // Round over: fill the craters, wipe scores, and redeploy everyone.
+  // ---- round statistics: per-player + per-gun tallies, CPU load; one
+  // protobuf record appended per round (see proto/roundstats.proto)
+  private cpuPrev = process.cpuUsage();
+  private cpuPrevAt = performance.now();
+  private cpuSum = 0;
+  private cpuCount = 0;
+  private cpuPeak = 0;
+  private roundStartTick = 0;
+
+  private sampleCpu(): void {
+    const now = performance.now();
+    const cu = process.cpuUsage(this.cpuPrev);
+    const pct = (cu.user + cu.system) / 1000 / Math.max(1, now - this.cpuPrevAt) * 100;
+    this.cpuPrev = process.cpuUsage();
+    this.cpuPrevAt = now;
+    this.cpuSum += pct;
+    this.cpuCount++;
+    this.cpuPeak = Math.max(this.cpuPeak, pct);
+  }
+
+  private logRoundStats(): void {
+    const players: PlayerRoundStats[] = [];
+    const guns = new Map<string, GunStats>();
+    for (const p of this.players.values()) {
+      players.push({
+        name: p.name, bot: !!p.bot,
+        kills: p.kills, deaths: p.deaths, assists: p.assists, damage: p.dmg,
+        jetUpTicks: p.jetUp, jetOverdriveTicks: p.jetOd, jetDiveTicks: p.jetDive,
+        fpsBest: p.bot ? 0 : p.fps.best, fpsAvg: p.bot ? 0 : p.fps.avg, fpsLow1: p.bot ? 0 : p.fps.low1,
+        guns: new Map(p.gunStats),
+      });
+      for (const [w, s] of p.gunStats) {
+        const agg = gunStat(guns, w);
+        agg.shots += s.shots;
+        agg.hits += s.hits;
+        agg.kills += s.kills;
+      }
+    }
+    void appendRoundStats({
+      endedUnixMs: Date.now(),
+      map: CURRENT_MAP,
+      roundSeconds: Math.round((this.tick - this.roundStartTick) / TICK_RATE),
+      tickRate: TICK_RATE,
+      players, guns,
+      cpuAvgPct: this.cpuCount ? this.cpuSum / this.cpuCount : 0,
+      cpuPeakPct: this.cpuPeak,
+    });
+    this.roundStartTick = this.tick;
+    this.cpuSum = 0;
+    this.cpuCount = 0;
+    this.cpuPeak = 0;
+  }
+
   private resetRound(): void {
+    this.logRoundStats();
     this.roundEnd = this.tick + this.roundLen;
     this.ghostScores.clear();
     this.world.setHoles([]);
@@ -588,6 +663,10 @@ export class GameRoom {
       p.assists = 0;
       p.dmg = 0;
       p.recent = [];
+      p.jetUp = 0;
+      p.jetOd = 0;
+      p.jetDive = 0;
+      p.gunStats = new Map();
       this.spawn(p, [...p.state.slots] as Loadout);
     }
     console.log(`[round] map rotated to ${CURRENT_MAP}`);
@@ -747,6 +826,7 @@ export class GameRoom {
       respawnAt: 0, wantsRespawn: false, respawnLoadout: loadout,
       respawnNade: this.randomNade(),
       protUntil: 0, lastSpawnTick: 0, rtt: 0, pings: new Map(),
+      jetUp: 0, jetOd: 0, jetDive: 0, gunStats: new Map(), fps: { best: 0, avg: 0, low1: 0 },
     };
     this.players.set(p.id, p);
     this.spawn(p, loadout);

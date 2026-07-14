@@ -1,0 +1,42 @@
+// Schema for the length-prefixed round statistics log the server appends to
+// stats/rounds.pblog at the end of every round. Each record is a varint
+// byte-length followed by one RoundStats message (standard streaming framing).
+syntax = "proto3";
+
+package jetpack;
+
+message RoundStats {
+  int64 ended_unix_ms = 1;     // wall-clock time the round ended
+  string map = 2;              // map the round was played on
+  uint32 round_seconds = 3;    // how long the round ran
+  uint32 tick_rate = 4;        // server simulation rate
+  repeated PlayerStats players = 5;
+  repeated GunStats guns = 6;  // server-wide per-weapon totals
+  double cpu_avg_pct = 7;      // server process CPU, % of one core
+  double cpu_peak_pct = 8;
+}
+
+message PlayerStats {
+  string name = 1;
+  bool bot = 2;
+  uint32 kills = 3;
+  uint32 deaths = 4;
+  uint32 assists = 5;
+  uint32 damage = 6;
+  // jetpack usage, in simulation ticks
+  uint32 jet_up_ticks = 7;
+  uint32 jet_overdrive_ticks = 8;
+  uint32 jet_dive_ticks = 9;
+  // client-reported frame rate (humans only; zero for bots)
+  double fps_best = 10;
+  double fps_avg = 11;
+  double fps_low1 = 12;        // lowest 1% (p99 frame time)
+  repeated GunStats guns = 13; // this player's per-weapon breakdown
+}
+
+message GunStats {
+  string weapon = 1;           // weapon id (rifle, sniper, ...)
+  uint32 shots = 2;            // trigger pulls
+  uint32 hits = 3;             // bullets that damaged a player
+  uint32 kills = 4;
+}
