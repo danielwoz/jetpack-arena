@@ -6,7 +6,7 @@ import {
   FUEL_MAX, GRAVITY, INPUT_QUEUE_CAP, MAX_FALL_SPEED, MAX_HP,
   MAX_NAME_LEN, MAX_PLAYERS, MIN_PLAYERS, NADE_BOUNCE, NADE_COUNT,
   NADE_HOLE_R, NADE_SHOCK_PUSH, NADE_SHOCK_R, NADE_THROW_SPEED, NAPALM_DIRECT_TICKS, PING_INTERVAL_TICKS,
-  PLAYER_H, PLAYER_HH, PLAYER_HW, ROUND_TICKS, SNAPSHOT_EVERY, SPAWN_PROTECT_TICKS,
+  MAX_RUN, PLAYER_H, PLAYER_HH, PLAYER_HW, ROUND_TICKS, SNAPSHOT_EVERY, SPAWN_PROTECT_TICKS, SPRINT_MULT,
   TICK_MS, TICK_RATE, WORLD_H, WORLD_W,
   secTicks,
 } from '../shared/constants.ts';
@@ -79,6 +79,7 @@ interface ServerPlayer {
   respawnLoadout: Loadout;
   respawnNade: NadeType;
   protUntil: number;
+  lastSpawnTick: number;
   rtt: number;
   pings: Map<number, number>;   // outstanding ping id → sent-at ms
 }
@@ -269,7 +270,7 @@ export class GameRoom {
       burnTicks: 0, burnBy: -1, blindTicks: 0,
       queue: [], lastSeq: 0, lastQueuedSeq: 0, lastCmd: idleCmd(),
       respawnAt: 0, wantsRespawn: false, respawnLoadout: loadout, respawnNade: nadeType,
-      protUntil: 0, rtt: 0, pings: new Map(),
+      protUntil: 0, lastSpawnTick: 0, rtt: 0, pings: new Map(),
     };
     this.players.set(p.id, p);
     this.spawn(p, loadout, nadeType);
@@ -291,6 +292,7 @@ export class GameRoom {
       x: sp.x, y: sp.y - PLAYER_H, alive: true, onGround: false,
     } satisfies Partial<PlayerState>);
     p.protUntil = this.tick + SPAWN_PROTECT_TICKS;
+    p.lastSpawnTick = this.tick;
     p.wantsRespawn = false;
     p.burnTicks = 0;
     p.blindTicks = 0;
@@ -368,7 +370,11 @@ export class GameRoom {
           }
         }
         const res = stepPlayer(p.state, cmd, SOLIDS, this.world);
-        if (res.fired) fireBullets(this, p, cmd.rt, this.bullets, cmd.zoom);
+        if (res.fired) {
+          fireBullets(this, p, cmd.rt, this.bullets, cmd.zoom);
+          // opening fire forfeits what's left of spawn protection
+          p.protUntil = Math.min(p.protUntil, this.tick);
+        }
         if (res.threw) this.throwNade(p, secTicks(NADES[p.state.nadeType].fuseSec) - res.primeTicks);
         if (res.handBoom) this.detonate(p.state.x, p.state.y, p, p.state.nadeType);
         if (res.fellDmg > 0) {
@@ -574,8 +580,12 @@ export class GameRoom {
   }
 
   private randomLoadout(): Loadout {
-    const pick = (arr: readonly WeaponId[]): WeaponId =>
-      arr[Math.floor(Math.random() * arr.length)];
+    // bots never take the M24 — a 100-damage instant-hit gun with bot aim
+    // reads as cheating
+    const pick = (arr: readonly WeaponId[]): WeaponId => {
+      const pool = arr.filter((w) => w !== 'sniper');
+      return pool[Math.floor(Math.random() * pool.length)];
+    };
     return [pick(SLOT_OPTIONS[0]), pick(SLOT_OPTIONS[1]), pick(SLOT_OPTIONS[2])];
   }
 
@@ -722,7 +732,7 @@ export class GameRoom {
       queue: [], lastSeq: 0, lastQueuedSeq: 0, lastCmd: idleCmd(),
       respawnAt: 0, wantsRespawn: false, respawnLoadout: loadout,
       respawnNade: this.randomNade(),
-      protUntil: 0, rtt: 0, pings: new Map(),
+      protUntil: 0, lastSpawnTick: 0, rtt: 0, pings: new Map(),
     };
     this.players.set(p.id, p);
     this.spawn(p, loadout);
@@ -738,20 +748,27 @@ export class GameRoom {
     let aim = p.state.aim;
     let fire = false;
     let near = false;
-    let bd = Infinity, bx = 0, by = 0;
+    let bd = Infinity, bx = 0, by = 0, tvx = 0, tvy = 0;
     for (const o of this.players.values()) {
       if (o.id === p.id || !o.state.alive) continue;
+      // fresh human spawns get a 3 s grace period from bots
+      if (!o.bot && this.tick - o.lastSpawnTick < secTicks(3)) continue;
       // bots see what a player would: a wide 16:9 window, so generous
       // horizontally but restricted vertically
       if (Math.abs(o.state.x - p.state.x) > 1150) continue;
       if (Math.abs(o.state.y - p.state.y) > 640) continue;
       const d = dist(p.state.x, p.state.y, o.state.x, o.state.y);
-      if (d < bd) { bd = d; bx = o.state.x; by = o.state.y; }
+      if (d < bd) { bd = d; bx = o.state.x; by = o.state.y; tvx = o.state.vx; tvy = o.state.vy; }
     }
     if (bd < Infinity) {
-      // aim at the lower torso — bots never go for the head. botAcc of the
+      // fast movers are hard to track: accuracy drops by up to 75% against
+      // a target at full sideways sprint-jet speed
+      const tSpeed = Math.hypot(tvx, tvy);
+      const evade = Math.min(1, tSpeed / (MAX_RUN * SPRINT_MULT));
+      const acc = this.botAcc * (1 - 0.75 * evade);
+      // aim at the lower torso — bots never go for the head. acc of the
       // shots track true; the rest are flung wide.
-      const miss = Math.random() < this.botAcc ? 0.02 : 0.12 + Math.random() * 0.22;
+      const miss = Math.random() < acc ? 0.02 : 0.12 + Math.random() * 0.22;
       aim = Math.atan2(by + 10 - p.state.y, bx - p.state.x)
         + (Math.random() < 0.5 ? -1 : 1) * miss;
       // hold fire without line of sight or beyond effective range
