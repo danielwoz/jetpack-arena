@@ -189,19 +189,21 @@ let leadCurX = 0; // cursor lead, smoothed slower than the camera
 let leadCurY = 0;
 let spawnSeen = false;
 let started = false;
+let rafStarted = false;
 let wasAlive = false;
 let lastKillerName: string | null = null;
 let remotes: RenderPlayer[] = [];
 const frameDts: number[] = [];
 let perfT = 0;
 
-let lastJoin: { name: string; loadout: Parameters<typeof Net.connect>[1]; nadeType: Parameters<typeof Net.connect>[2]; serverId?: string } | null = null;
+let lastJoin: { name: string; loadout: Parameters<typeof Net.connect>[1]; nadeType: Parameters<typeof Net.connect>[2]; serverId?: string; pw?: string } | null = null;
 
-const doJoin = (name: string, loadout: Parameters<typeof Net.connect>[1], nadeType: Parameters<typeof Net.connect>[2], serverId?: string, silent = false): void => {
-  Net.connect(name, loadout, nadeType, serverId)
+const doJoin = (name: string, loadout: Parameters<typeof Net.connect>[1], nadeType: Parameters<typeof Net.connect>[2], serverId?: string, pw?: string, silent = false): void => {
+  Net.connect(name, loadout, nadeType, serverId, pw)
     .then((n) => {
       net = n;
-      lastJoin = { name, loadout, nadeType, serverId };
+      lastJoin = { name, loadout, nadeType, serverId, pw };
+      ui.noteJoined(name, pw);
       net.onClose = () => void reconnect();
       net.onSnap = onSnapshot;
       ui.hideDisconnected();
@@ -212,7 +214,18 @@ const doJoin = (name: string, loadout: Parameters<typeof Net.connect>[1], nadeTy
     });
 };
 
-ui.onJoin = (name, loadout, nadeType, serverId) => doJoin(name, loadout, nadeType, serverId);
+ui.onJoin = (name, loadout, nadeType, serverId, pw) => doJoin(name, loadout, nadeType, serverId, pw);
+
+// ESC → DISCONNECT: a deliberate exit back to the server browser, with the
+// auto-reconnect machinery kept out of the way
+ui.onDisconnect = () => {
+  if (net) net.close();
+  net = null;
+  lastJoin = null;
+  started = false;
+  hud.hide();
+  ui.showJoin();
+};
 
 // Connection lost: wait for the server to answer again, then either rejoin
 // silently (same build still deployed) or reload into the new build — the
@@ -239,7 +252,7 @@ async function reconnect(): Promise<void> {
     } catch { /* server still down — keep waiting */ }
     await new Promise((r) => setTimeout(r, 2000));
   }
-  if (lastJoin) doJoin(lastJoin.name, lastJoin.loadout, lastJoin.nadeType, lastJoin.serverId, true);
+  if (lastJoin) doJoin(lastJoin.name, lastJoin.loadout, lastJoin.nadeType, lastJoin.serverId, lastJoin.pw, true);
 }
 
 ui.onRespawn = (loadout, nadeType) => {
@@ -264,7 +277,11 @@ function onSnapshot(snap: Snapshot): void {
       ui.hideJoin();
       hud.show();
       camera.snapTo(self.x, self.y);
-      requestAnimationFrame(frame);
+      if (!self.alive) ui.showDeploy();
+      if (!rafStarted) {
+        rafStarted = true;
+        requestAnimationFrame(frame);
+      }
     }
     if (wasAlive && !self.alive) {
       // hold on the body for two seconds before the respawn screen
@@ -464,7 +481,8 @@ function frame(now: number): void {
   renderer.resize();
   overlay.resize();
   camera.updateAspect(glCanvas.clientWidth, glCanvas.clientHeight);
-  net!.advance(elapsed);
+  if (!net) return;
+  net.advance(elapsed);
 
   acc += elapsed;
   // a slow machine must not sim-step its way into an even slower frame:

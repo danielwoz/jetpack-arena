@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fork } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { serveStatic } from './static.ts';
+import { deleteName, isReserved, reserveName } from './names.ts';
 
 // Lobby / room manager. Each game room runs in its own forked process (one
 // core each); this process serves the client, exposes the server browser at
@@ -116,8 +117,56 @@ function autosize(): void {
   }
 }
 
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (c: Buffer) => {
+      body += c.toString();
+      if (body.length > 2048) reject(new Error('too large'));
+    });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
+const json = (res: http.ServerResponse, code: number, data: unknown): void => {
+  res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(data));
+};
+
+async function handleNames(req: http.IncomingMessage, res: http.ServerResponse, url: string): Promise<void> {
+  let body: { name?: string; password?: string };
+  try {
+    body = JSON.parse(await readBody(req)) as typeof body;
+  } catch {
+    json(res, 400, { error: 'bad request' });
+    return;
+  }
+  const name = (body.name ?? '').trim().slice(0, 16);
+  if (!name) {
+    json(res, 400, { error: 'name required' });
+    return;
+  }
+  if (url === '/names/reserve') {
+    const pw = reserveName(name);
+    if (pw) json(res, 200, { ok: true, password: pw });
+    else json(res, 409, { error: 'name is already reserved' });
+    return;
+  }
+  if (url === '/names/delete') {
+    if (deleteName(name, body.password ?? '')) json(res, 200, { ok: true });
+    else json(res, 403, { error: isReserved(name) ? 'wrong password' : 'name is not reserved' });
+    return;
+  }
+  json(res, 404, { error: 'not found' });
+}
+
 const server = http.createServer((req, res) => {
   const url = (req.url ?? '/').split('?')[0];
+  if (url.startsWith('/names/') && req.method === 'POST') {
+    void handleNames(req, res, url);
+    return;
+  }
   if (url === '/servers') {
     const list = ranked().map((r) => ({
       id: r.id,

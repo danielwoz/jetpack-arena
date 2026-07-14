@@ -1034,3 +1034,15 @@ button.pad-focus {
 .srv-row.srv-head { color: #5c6f96; font-size: 10px; cursor: default; position: sticky; top: 0; background: #101528; }
 .srv-row.selected { background: rgba(47, 128, 201, 0.3); color: #dceaff; outline: 1px solid #2f80c9; }
 .srv-row.full { opacity: 0.45; cursor: not-allowed; }
+
+/* ---- reserved callsigns */
+#namebar { display: flex; gap: 8px; justify-content: center; align-items: stretch; }
+#namebar #reservebtn { margin: 0; padding: 0 14px; font-size: 11px; }
+#namechips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 8px 0 0; }
+.namechip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid #2f4370;
+  border-radius: 12px; font-size: 11px; letter-spacing: 0.08em; color: #9fc2ff; cursor: pointer; }
+.namechip.active { background: rgba(47, 128, 201, 0.3); color: #dceaff; }
+.namechip button { background: none; border: none; color: #5c6f96; cursor: pointer; font-size: 11px; padding: 0 2px; }
+.namechip button:hover { color: #ff8080; }
+#pwrow { margin-top: 8px; }
+#pwrow input { text-align: center; letter-spacing: 0.3em; }

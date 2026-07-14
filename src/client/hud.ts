@@ -39,6 +39,11 @@ export class Hud {
   private minimapCtx = this.minimap.getContext('2d')!;
   private minimapBg: HTMLCanvasElement | null = null;
 
+  hide(): void {
+    this.hud.classList.add('hidden');
+    this.crosshair.classList.add('hidden');
+  }
+
   show(): void {
     this.hud.classList.remove('hidden');
     this.crosshair.classList.remove('hidden');

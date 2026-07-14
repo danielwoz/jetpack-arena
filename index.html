@@ -163,7 +163,14 @@
     <div id="join" class="screen">
       <div class="panel">
         <h1>JETPACK ARENA</h1>
-        <input id="name" maxlength="16" placeholder="callsign" autocomplete="off" spellcheck="false" />
+        <div id="namebar">
+          <input id="name" maxlength="16" placeholder="callsign" autocomplete="off" spellcheck="false" />
+          <button id="reservebtn" class="minor" title="reserve this callsign on this host">RESERVE</button>
+        </div>
+        <div id="namechips"></div>
+        <div id="pwrow" class="hidden">
+          <input id="namepw" maxlength="8" placeholder="name password" autocomplete="off" spellcheck="false" />
+        </div>
         <div id="join-tabs" class="join-tabs" role="tablist" aria-label="predeploy menus">
           <button type="button" class="join-tab active" data-tab="loadout" role="tab" aria-selected="true" aria-controls="join-tab-loadout">
             LOADOUT
@@ -177,7 +184,6 @@
         </div>
         <div id="join-tab-loadout" class="join-tab-panel loadout" role="tabpanel">
           <div id="serverlist"></div>
-          <div id="join-weapons" class="loadout"></div>
           <button id="joinbtn">DEPLOY</button>
         </div>
         <div id="join-tab-controls" class="join-tab-panel hidden" role="tabpanel">
@@ -230,6 +236,7 @@
         <div class="setrow"><span>RESOLUTION</span><input type="range" id="res-scale" min="50" max="100" /></div>
         <button id="setcontrols" class="minor">INPUT / KEY BINDINGS</button>
         <button id="adminbtn" class="minor">ADMIN</button>
+        <button id="leavebtn" class="minor">DISCONNECT FROM SERVER</button>
         <button id="setclose">DONE</button>
       </div>
     </div>

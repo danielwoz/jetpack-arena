@@ -30,14 +30,14 @@ export class Net {
   // each snapshot's tick to absorb jitter.
   private estTick = -1;
 
-  static connect(name: string, loadout: Loadout, nadeType: NadeType, serverId?: string): Promise<Net> {
+  static connect(name: string, loadout: Loadout, nadeType: NadeType, serverId?: string, pw?: string): Promise<Net> {
     return new Promise((resolve, reject) => {
       const net = new Net();
       const ws = new WebSocket(serverUrl(serverId));
       net.ws = ws;
       let welcomed = false;
 
-      ws.onopen = () => net.send({ t: 'join', name, loadout, nadeType });
+      ws.onopen = () => net.send({ t: 'join', name, loadout, nadeType, pw });
       ws.onerror = () => { if (!welcomed) reject(new Error('could not reach server')); };
       ws.onclose = () => {
         if (!welcomed) reject(new Error('connection closed'));
@@ -97,6 +97,11 @@ export class Net {
 
   sendAdmin(data: unknown): void {
     this.send({ t: 'admin', data });
+  }
+
+  close(): void {
+    this.onClose = () => {};
+    this.ws?.close();
   }
 
   sendPerf(best: number, avg: number, low1: number): void {

@@ -263,7 +263,9 @@ export class Ui {
   };
   private respawnBtn = el<HTMLButtonElement>('respawnbtn');
   private joinStatus = el<HTMLDivElement>('join-status');
-  private joinWeapons = el<HTMLDivElement>('join-weapons');
+  // detached stub: the join screen no longer hosts a weapon picker, but
+  // pad navigation still probes this container
+  private joinWeapons = document.createElement('div');
   private deathWeapons = el<HTMLDivElement>('death-weapons');
 
   private loadout: Loadout = loadStoredLoadout();
@@ -284,7 +286,7 @@ export class Ui {
   private padBindrowIndex = -1;
   private padControlsBtnIndex = -1;
 
-  onJoin: (name: string, loadout: Loadout, nadeType: NadeType, serverId?: string) => void = () => {};
+  onJoin: (name: string, loadout: Loadout, nadeType: NadeType, serverId?: string, pw?: string) => void = () => {};
   onRespawn: (loadout: Loadout, nadeType: NadeType) => void = () => {};
   onCaptureChange: (capturing: boolean) => void = () => {};
 
@@ -989,6 +991,10 @@ export class Ui {
     el<HTMLButtonElement>('setclose').addEventListener('click', () => {
       settings.classList.add('hidden');
     });
+    el<HTMLButtonElement>('leavebtn').addEventListener('click', () => {
+      settings.classList.add('hidden');
+      this.onDisconnect();
+    });
     const admin = el<HTMLDivElement>('admin');
     el<HTMLButtonElement>('adminbtn').addEventListener('click', () => {
       settings.classList.add('hidden');
@@ -1086,11 +1092,9 @@ export class Ui {
     this.refreshBindLists();
     this.startPadUiLoop(controls, settings, admin);
 
-    buildLoadoutPicker(this.joinWeapons, this.loadout, this.nadeSel);
-    this.focusPickerSelected(this.joinWeapons, this.joinCursor);
+    // gun selection lives on the deploy/respawn screen; the join screen
+    // only picks a server and callsign
     void ensureWeaponIconAtlas().then(() => {
-      buildLoadoutPicker(this.joinWeapons, this.loadout, this.nadeSel);
-      this.focusPickerSelected(this.joinWeapons, this.joinCursor);
       if (!this.death.classList.contains('hidden')) {
         buildLoadoutPicker(this.deathWeapons, this.loadout, this.nadeSel);
         this.focusPickerSelected(this.deathWeapons, this.deathCursor);
@@ -1112,8 +1116,39 @@ export class Ui {
       localStorage.setItem('callsign', name);
       this.joinBtn.disabled = true;
       this.joinStatus.textContent = 'connecting…';
-      this.onJoin(name, [...this.loadout] as Loadout, this.nadeSel.nade, this.selectedServer ?? undefined);
+      const typedPw = el<HTMLInputElement>('namepw').value.trim();
+      const pw = this.savedPwFor(name) ?? (typedPw || undefined);
+      this.onJoin(name, [...this.loadout] as Loadout, this.nadeSel.nade, this.selectedServer ?? undefined, pw);
     });
+
+    el<HTMLButtonElement>('reservebtn').addEventListener('click', () => {
+      const name = this.nameInput.value.trim();
+      if (!name) {
+        this.joinStatus.textContent = 'enter a callsign to reserve';
+        return;
+      }
+      if (this.savedNames().length >= 4 && !this.savedPwFor(name)) {
+        this.joinStatus.textContent = 'this machine already holds 4 names — remove one first';
+        return;
+      }
+      void fetch('/names/reserve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      }).then(async (res) => {
+        const data = await res.json() as { password?: string; error?: string };
+        if (res.ok && data.password) {
+          this.noteJoined(name, data.password);
+          this.joinStatus.textContent = `reserved! password: ${data.password} — saved on this machine, note it down for others`;
+        } else {
+          this.joinStatus.textContent = data.error ?? 'reservation failed';
+        }
+      }).catch(() => {
+        this.joinStatus.textContent = 'reservation failed — server unreachable';
+      });
+    });
+    this.nameInput.addEventListener('input', () => this.renderNameChips());
+    this.renderNameChips();
 
     this.respawnBtn.addEventListener('click', () => {
       if (performance.now() < this.respawnReadyAt) return;
@@ -1126,6 +1161,10 @@ export class Ui {
   joinFailed(reason: string): void {
     this.joinBtn.disabled = false;
     this.joinStatus.textContent = reason;
+    if (reason.includes('reserved')) {
+      el<HTMLDivElement>('pwrow').classList.remove('hidden');
+      el<HTMLInputElement>('namepw').focus();
+    }
   }
 
   hideJoin(): void {
@@ -1161,6 +1200,76 @@ export class Ui {
     this.death.classList.add('hidden');
     this.setPadDeployFocus(false);
     this.clearPickerHover(this.deathWeapons);
+  }
+
+  // ---- reserved callsigns saved on this machine (cookie, max 4)
+  private savedNames(): { n: string; p: string }[] {
+    const m = document.cookie.match(/(?:^|; )ja_names=([^;]*)/);
+    if (!m) return [];
+    try {
+      const list = JSON.parse(decodeURIComponent(m[1])) as { n: string; p: string }[];
+      return Array.isArray(list) ? list.slice(0, 4) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private writeNames(list: { n: string; p: string }[]): void {
+    const v = encodeURIComponent(JSON.stringify(list.slice(0, 4)));
+    document.cookie = `ja_names=${v}; max-age=31536000; path=/; SameSite=Lax`;
+    this.renderNameChips();
+  }
+
+  savedPwFor(name: string): string | undefined {
+    return this.savedNames().find((e) => e.n.toLowerCase() === name.trim().toLowerCase())?.p;
+  }
+
+  // called by main once a join with a password succeeds on this machine
+  noteJoined(name: string, pw?: string): void {
+    if (!pw || this.savedPwFor(name)) return;
+    const list = this.savedNames();
+    if (list.length >= 4) return;
+    list.push({ n: name.trim(), p: pw });
+    this.writeNames(list);
+  }
+
+  private renderNameChips(): void {
+    const box = el<HTMLDivElement>('namechips');
+    const list = this.savedNames();
+    box.innerHTML = '';
+    for (const entry of list) {
+      const chip = document.createElement('span');
+      chip.className = 'namechip' + (this.nameInput.value.trim().toLowerCase() === entry.n.toLowerCase() ? ' active' : '');
+      const label = document.createElement('span');
+      label.textContent = entry.n;
+      label.addEventListener('click', () => {
+        this.nameInput.value = entry.n;
+        this.renderNameChips();
+      });
+      const forget = document.createElement('button');
+      forget.textContent = '✕';
+      forget.title = 'remove from this machine';
+      forget.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.writeNames(list.filter((x) => x.n !== entry.n));
+      });
+      const free = document.createElement('button');
+      free.textContent = 'FREE';
+      free.title = 'delete the reservation for everyone';
+      free.addEventListener('click', (e) => {
+        e.stopPropagation();
+        void fetch('/names/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: entry.n, password: entry.p }),
+        }).then((res) => {
+          this.joinStatus.textContent = res.ok ? `"${entry.n}" is free for anyone again` : 'could not delete the reservation';
+          if (res.ok) this.writeNames(list.filter((x) => x.n !== entry.n));
+        });
+      });
+      chip.append(label, forget, free);
+      box.appendChild(chip);
+    }
   }
 
   private selectedServer: string | null = null;
@@ -1205,6 +1314,26 @@ export class Ui {
         row.classList.add('selected');
       });
     }
+  }
+
+  onDisconnect: () => void = () => {};
+
+  // first deploy after connecting: the respawn screen doubles as loadout pick
+  showDeploy(): void {
+    this.showDeath(null, true);
+    this.deathMsg.textContent = 'CHOOSE YOUR LOADOUT';
+  }
+
+  showJoin(): void {
+    this.inGame = false;
+    this.death.classList.add('hidden');
+    this.disconnected.classList.add('hidden');
+    el<HTMLDivElement>('settings').classList.add('hidden');
+    this.join.classList.remove('hidden');
+    this.joinBtn.disabled = false;
+    this.joinStatus.textContent = '';
+    this.onCaptureChange(false);
+    this.startServerBrowser();
   }
 
   showDisconnected(): void {

@@ -16,6 +16,7 @@ import { dist } from '../shared/math.ts';
 import { applyDamage, stepPlayer } from '../shared/step.ts';
 import { TUNE, applyTune, tuneSnapshot } from '../shared/tuning.ts';
 import { appendRoundStats, gunStat } from './stats.ts';
+import { nameUsable } from './names.ts';
 import type { GunStats, PlayerRoundStats } from './stats.ts';
 import { DEFAULT_LOADOUT, NADES, SLOT_OPTIONS, WEAPONS, isNadeType, validLoadout } from '../shared/weapons.ts';
 import { World } from '../shared/world.ts';
@@ -231,10 +232,19 @@ export class GameRoom {
         }
         const loadout: Loadout = validLoadout(msg.loadout) ? msg.loadout : [...DEFAULT_LOADOUT];
         const nadeType: NadeType = isNadeType(msg.nadeType) ? msg.nadeType : 'frag';
-        const name = this.uniqueName(sanitizeName(msg.name));
+        const requested = sanitizeName(msg.name);
+        if (!nameUsable(requested, typeof msg.pw === 'string' ? msg.pw : undefined)) {
+          conn.send(JSON.stringify({ t: 'reject', reason: 'name reserved — password required' }));
+          conn.close();
+          return;
+        }
+        const name = this.uniqueName(requested);
         clearTimeout(joinDeadline);
         player = this.createPlayer(conn, name, loadout, nadeType);
         player.lastHeard = this.tick;
+        // humans arrive on the deploy screen: dead until they pick a loadout
+        player.state.alive = false;
+        player.respawnAt = this.tick;
         conn.send(JSON.stringify({
           t: 'welcome', id: player.id, tick: this.tick, tickRate: TICK_RATE, holes: this.world.holes,
           map: CURRENT_MAP,
