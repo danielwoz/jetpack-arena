@@ -44,6 +44,11 @@ export class Conn {
     this.ws.close();
   }
 
+  // hard drop — for connections that stopped answering entirely
+  terminate(): void {
+    this.ws.terminate();
+  }
+
   private delay(fn: () => void): void {
     if (this.lagHalf > 0) setTimeout(fn, this.lagHalf);
     else fn();

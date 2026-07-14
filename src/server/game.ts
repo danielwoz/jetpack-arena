@@ -83,6 +83,7 @@ interface ServerPlayer {
   respawnNade: NadeType;
   protUntil: number;
   lastSpawnTick: number;
+  lastHeard: number;   // last tick with any message from this connection
   jetUp: number;       // ticks of plain jet thrust this round
   jetOd: number;       // ticks of overdrive thrust
   jetDive: number;     // ticks of powered dive
@@ -174,7 +175,7 @@ export class GameRoom {
   }
 
   // one-line status for the lobby's server browser
-  status(): { humans: number; bots: number; players: number; max: number; map: string; roundSecs: number; full: boolean } {
+  status(): { humans: number; bots: number; players: number; max: number; map: string; roundSecs: number; full: boolean; ghosts: number } {
     let humans = 0;
     let bots = 0;
     for (const p of this.players.values()) {
@@ -188,6 +189,7 @@ export class GameRoom {
       map: CURRENT_MAP,
       roundSecs: Math.max(0, Math.round((this.roundEnd - this.tick) / TICK_RATE)),
       full: this.players.size >= MAX_PLAYERS,
+      ghosts: this.ghostScores.size,
     };
   }
 
@@ -219,6 +221,7 @@ export class GameRoom {
     }, 10_000);
 
     conn.onMsg = (msg) => {
+      if (player) player.lastHeard = this.tick;
       if (!player) {
         if (msg.t !== 'join') return;
         if (this.players.size >= MAX_PLAYERS) {
@@ -231,6 +234,7 @@ export class GameRoom {
         const name = this.uniqueName(sanitizeName(msg.name));
         clearTimeout(joinDeadline);
         player = this.createPlayer(conn, name, loadout, nadeType);
+        player.lastHeard = this.tick;
         conn.send(JSON.stringify({
           t: 'welcome', id: player.id, tick: this.tick, tickRate: TICK_RATE, holes: this.world.holes,
           map: CURRENT_MAP,
@@ -318,7 +322,7 @@ export class GameRoom {
       burnTicks: 0, burnBy: -1, blindTicks: 0,
       queue: [], lastSeq: 0, lastQueuedSeq: 0, lastCmd: idleCmd(),
       respawnAt: 0, wantsRespawn: false, respawnLoadout: loadout, respawnNade: nadeType,
-      protUntil: 0, lastSpawnTick: 0, rtt: 0, pings: new Map(),
+      protUntil: 0, lastSpawnTick: 0, lastHeard: 0, rtt: 0, pings: new Map(),
       jetUp: 0, jetOd: 0, jetDive: 0, gunStats: new Map(), fps: { best: 0, avg: 0, low1: 0 },
     };
     this.players.set(p.id, p);
@@ -844,7 +848,7 @@ export class GameRoom {
       queue: [], lastSeq: 0, lastQueuedSeq: 0, lastCmd: idleCmd(),
       respawnAt: 0, wantsRespawn: false, respawnLoadout: loadout,
       respawnNade: this.randomNade(),
-      protUntil: 0, lastSpawnTick: 0, rtt: 0, pings: new Map(),
+      protUntil: 0, lastSpawnTick: 0, lastHeard: 0, rtt: 0, pings: new Map(),
       jetUp: 0, jetOd: 0, jetDive: 0, gunStats: new Map(), fps: { best: 0, avg: 0, low1: 0 },
     };
     this.players.set(p.id, p);
@@ -960,6 +964,13 @@ export class GameRoom {
   private sendPings(): void {
     for (const p of this.players.values()) {
       if (!p.conn) continue;
+      // a human that has sent nothing for 15 s is a dead connection the
+      // socket layer failed to report — drop them (their score is kept)
+      if (this.tick - p.lastHeard > secTicks(15)) {
+        console.log(`[reap] ${p.name} silent for 15 s — dropping`);
+        p.conn.terminate();
+        continue;
+      }
       const id = this.nextPingId++;
       p.pings.set(id, performance.now());
       if (p.pings.size > 8) {

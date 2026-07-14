@@ -15,7 +15,7 @@ import { serveStatic } from './static.ts';
 const port = Number(process.env.PORT) || 8090;
 const TIERS = [8, 4, 0];
 const MAX_ROOMS = 12;
-const EMPTY_TTL_MS = 120_000;     // surplus human-free rooms linger this long
+const EMPTY_TTL_MS = 30_000;      // surplus human-free rooms linger this long
 
 const HEROES = [
   'Ripley', 'McClane', 'Sarah Connor', 'Furiosa', 'Indiana', 'Trinity',
@@ -24,6 +24,7 @@ const HEROES = [
 ];
 
 interface RoomStatus {
+  ghosts: number;          // disconnected players whose round score is held here
   humans: number;
   bots: number;
   players: number;
@@ -96,16 +97,19 @@ function autosize(): void {
       r.botTarget === tier && (r.status?.humans ?? 0) === 0 && !r.proc.killed);
     if (!fresh && rooms.size < MAX_ROOMS) spawnRoom(tier);
   }
-  // retire surplus human-free rooms (never the designated fresh one per tier)
+  // retire surplus human-free rooms. The keeper is the one holding ghost
+  // scores (players who dropped mid-round and may come back for them) —
+  // the freshly spawned untouched duplicate is the one that dies.
   const now = Date.now();
   for (const tier of TIERS) {
     const empties = [...rooms.values()]
       .filter((r) => r.botTarget === tier && (r.status?.humans ?? 0) === 0)
-      .sort((a, b) => Number(a.id) - Number(b.id));
+      .sort((a, b) =>
+        (b.status?.ghosts ?? 0) - (a.status?.ghosts ?? 0) || Number(a.id) - Number(b.id));
     for (const extra of empties.slice(1)) {
       if (rooms.size <= TIERS.length) break;
       if (extra.emptySince && now - extra.emptySince > EMPTY_TTL_MS) {
-        console.log(`[fleet] retiring surplus room ${extra.name}`);
+        console.log(`[fleet] retiring surplus room ${extra.name} (${extra.status?.ghosts ?? 0} ghosts)`);
         extra.proc.kill();
       }
     }
@@ -154,6 +158,8 @@ server.on('upgrade', (req, socket, head) => {
   });
   up.on('error', () => socket.destroy());
   socket.on('error', () => up.destroy());
+  up.on('close', () => socket.destroy());
+  socket.on('close', () => up.destroy());
 });
 
 autosize();
