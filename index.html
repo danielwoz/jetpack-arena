@@ -184,6 +184,10 @@
         </div>
         <div id="join-tab-loadout" class="join-tab-panel loadout" role="tabpanel">
           <div id="serverlist"></div>
+          <div id="skinbar">
+            <canvas id="skinpreview" width="132" height="176"></canvas>
+            <div id="skinrows"></div>
+          </div>
           <button id="joinbtn">DEPLOY</button>
         </div>
         <div id="join-tab-controls" class="join-tab-panel hidden" role="tabpanel">
@@ -222,10 +226,6 @@
     <div id="death" class="screen hidden">
       <div class="panel">
         <h2 id="deathmsg">YOU DIED</h2>
-        <div id="skinbar">
-          <canvas id="skinpreview" width="132" height="176"></canvas>
-          <div id="skinrows"></div>
-        </div>
         <div id="death-weapons" class="loadout"></div>
         <button id="respawnbtn" disabled>RESPAWN</button>
       </div>

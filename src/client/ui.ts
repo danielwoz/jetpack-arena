@@ -6,7 +6,7 @@ import { audio } from './audio.ts';
 import { gamepad } from './gamepad.ts';
 import { getRenderScale, setRenderScale } from './render/gl.ts';
 import { buildEquipVariant, paletteFor } from './render/soldier.ts';
-import { defaultEquip, skinsFor, validateEquip } from '../shared/skins.ts';
+import { defaultEquip, skinById, skinsFor, validateEquip } from '../shared/skins.ts';
 import type { Equip, SkinComponent } from '../shared/skins.ts';
 import { TUNE, WEAPON_TUNABLE } from '../shared/tuning.ts';
 
@@ -1150,8 +1150,27 @@ export class Ui {
         this.joinStatus.textContent = 'reservation failed — server unreachable';
       });
     });
-    this.nameInput.addEventListener('input', () => this.renderNameChips());
+    let prevName = this.nameInput.value;
+    this.nameInput.addEventListener('input', () => {
+      this.renderNameChips();
+      const name = this.nameInput.value.trim() || 'pilot';
+      if (!this.equipTouched) {
+        this.equip = defaultEquip(name);
+      } else {
+        // newly-earned special pieces select themselves — they are the point
+        const before = defaultEquip(prevName.trim() || 'pilot');
+        const after = defaultEquip(name);
+        for (const slot of ['torso', 'helmet', 'legs', 'pack'] as (keyof Equip)[]) {
+          const special = skinById(after[slot])?.lockedTo !== undefined;
+          const wasSpecial = skinById(before[slot])?.lockedTo !== undefined;
+          if (special && !wasSpecial) this.equip[slot] = after[slot];
+        }
+      }
+      prevName = this.nameInput.value;
+      this.buildSkinPicker();
+    });
     this.renderNameChips();
+    this.buildSkinPicker();
 
     this.respawnBtn.addEventListener('click', () => {
       if (performance.now() < this.respawnReadyAt) return;
@@ -1176,7 +1195,6 @@ export class Ui {
   }
 
   showDeath(killerName: string | null, instant = false): void {
-    this.buildSkinPicker();
     buildLoadoutPicker(this.deathWeapons, this.loadout, this.nadeSel);
     this.focusPickerSelected(this.deathWeapons, this.deathCursor);
     this.deathMsg.textContent = killerName ? `ELIMINATED BY ${killerName.toUpperCase()}` : 'YOU DIED';
