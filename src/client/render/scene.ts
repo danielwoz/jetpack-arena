@@ -10,7 +10,9 @@ import {
   makeConcreteTexture, makeMetalTexture, makeNebulaTexture, makePlanetTexture,
   makeRockTexture,
 } from './textures.ts';
-import { CAMO_COUNT, buildBodyVariant, buildSoldierAtlas } from './soldier.ts';
+import { CAMO_COUNT, buildEquipVariant, buildSoldierAtlas } from './soldier.ts';
+import { defaultEquip } from '../../shared/skins.ts';
+import type { Equip } from '../../shared/skins.ts';
 import type { BodyVariant, SoldierAtlas, SpriteMeta } from './soldier.ts';
 import { world } from '../world.ts';
 import type { RenderNade } from '../interp.ts';
@@ -71,38 +73,36 @@ const FACADE_COLS = 12;
 const FACADE_ROWS = 4;
 const FACADE_N = 48;
 
-// per-camo body textures, keyed "camoIdx:floral"; camo is picked by name
+// body textures keyed by the full equip combo. Uniform combos that match a
+// shipped photoreal atlas upgrade to it; mixed outfits use the component
+// painter until the per-part AI packs are generated.
 interface BodyTex { tex: Texture; torso: SpriteMeta; legs: SpriteMeta[] }
 const BODIES = new Map<string, BodyTex>();
 
-function nameHash(name: string): number {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return h;
+// which shipped fused atlas exactly matches this outfit, if any
+function aiFileFor(eq: Equip): string | null {
+  const m = /^t(\d+)$/.exec(eq.torso);
+  const uniformCamo = m && eq.legs === `l${m[1]}` && eq.pack === `p${m[1]}`;
+  if (uniformCamo && eq.helmet === `h${m![1]}`) return m![1];
+  if (uniformCamo && eq.helmet === 'hg') return 'gold';
+  if (uniformCamo && eq.helmet === 'hf') return 'floral';
+  const chromeBody = eq.torso === 'ts' && eq.legs === 'ls';
+  if (chromeBody && eq.helmet === 'hs') return 'silver';
+  if (chromeBody && eq.helmet === 'hg') return 'gold_silver';
+  if (chromeBody && eq.helmet === 'hf') return 'floral_silver';
+  if (eq.torso === 'tp' && eq.legs === 'lp' && eq.pack === 'pp' && /^h\d+$/.test(eq.helmet)) return '-1';
+  return null;
 }
 
-function bodyFor(r: Renderer, name: string): BodyTex {
-  const lower = name.toLowerCase();
-  const pink = lower.includes('darken');
-  const flags = {
-    floral: lower.includes('tedgey'),
-    gold: lower.includes('tankarama'),
-    silver: /mutant|smock|mk47/.test(lower),
-  };
-  const idx = pink ? -1 : nameHash(name) % CAMO_COUNT;
-  const key = `${idx}:${+flags.floral}${+flags.gold}${+flags.silver}`;
+export function bodyForEquip(r: Renderer, eq: Equip): BodyTex {
+  const key = `${eq.torso}|${eq.helmet}|${eq.legs}|${eq.pack}`;
   let b = BODIES.get(key);
   if (!b) {
-    const v: BodyVariant = buildBodyVariant(idx, flags);
+    const v: BodyVariant = buildEquipVariant(eq);
     b = { tex: r.createTexture(v.canvas, false), torso: v.torso, legs: v.legs };
     BODIES.set(key, b);
-    // photoreal AI body atlas replaces the painted one when it arrives;
-    // silver is a full chrome uniform, combinable with gold/floral headgear
-    const file = flags.floral ? (flags.silver ? 'floral_silver' : 'floral')
-      : flags.gold ? (flags.silver ? 'gold_silver' : 'gold')
-      : flags.silver ? 'silver'
-      : String(idx);
-    attachAiBody(r, b, file);
+    const file = aiFileFor(eq);
+    if (file !== null) attachAiBody(r, b, file);
   }
   return b;
 }
@@ -160,12 +160,9 @@ export function ensureTextures(r: Renderer): SceneTex {
     // behind the join screen — instead of streaming it mid-rotation
     loadPandoraAssets(r);
     void themeRenderer;
-    // pre-bake the standard camo set so new players don't hitch mid-fight
+    // pre-bake the twelve uniform outfits so new players don't hitch mid-fight
     for (let i = 0; i < CAMO_COUNT; i++) {
-      const v = buildBodyVariant(i);
-      const b: BodyTex = { tex: r.createTexture(v.canvas, false), torso: v.torso, legs: v.legs };
-      BODIES.set(`${i}:000`, b);
-      attachAiBody(r, b, i);
+      bodyForEquip(r, { torso: `t${i}`, helmet: `h${i}`, legs: `l${i}`, pack: `p${i}` });
     }
   }
   return TEX;
@@ -836,7 +833,7 @@ function drawSolidDecor(r: Renderer, s: MapRect, t: number): void {
 const animPhase = new Map<number, number>();
 
 interface SoldierPose {
-  id: number; name: string; x: number; y: number; aim: number;
+  id: number; name: string; skins: Equip; x: number; y: number; aim: number;
   weapon: WeaponId; vx: number; onGround: boolean;
   jetU: boolean; jetD: boolean; priming: boolean; healing: boolean;
   bandageT: number; reloadT: number; primeT: number; dizzy: boolean;
@@ -884,7 +881,7 @@ function drawSoldier(r: Renderer, p: SoldierPose, dt: number, t: number, tex: Sc
   }
 
   // ---- sprite layers: legs, torso (per-player camo), rotating gun+arms
-  const body = bodyFor(r, p.name);
+  const body = bodyForEquip(r, p.skins);
   r.setTexture(body.tex);
   const frame = running
     ? body.legs[2 + ((Math.floor((ph / (Math.PI * 2)) * 8) % 8) + 8) % 8]
@@ -1200,7 +1197,7 @@ export function drawScene(
 
   for (const p of players) {
     drawSoldier(r, {
-      id: p.id, name: p.name, x: p.x, y: p.y, aim: p.aim, weapon: p.weapon,
+      id: p.id, name: p.name, skins: p.skins ?? defaultEquip(p.name), x: p.x, y: p.y, aim: p.aim, weapon: p.weapon,
       vx: p.vx, onGround: p.onGround, jetU: p.jetU, jetD: p.jetD,
       priming: p.priming, healing: p.healing, bandageT: p.bandageT, reloadT: p.reloadT, primeT: p.primeT,
       dizzy: p.dizzy, prot: p.prot, accent: playerColor(p.id),
@@ -1225,7 +1222,7 @@ export function drawScene(
   }
   if (self && self.alive) {
     drawSoldier(r, {
-      id: self.id, name: self.name, x: self.x, y: self.y, aim: self.aim, weapon: self.weapon,
+      id: self.id, name: self.name, skins: self.skins ?? defaultEquip(self.name), x: self.x, y: self.y, aim: self.aim, weapon: self.weapon,
       vx: self.vx, onGround: self.onGround, jetU: self.jetU, jetD: self.jetD,
       priming: self.priming, healing: self.healing, bandageT: self.bandageT, reloadT: self.reloadT, primeT: self.primeT,
       dizzy: self.dizzy, prot: self.prot, accent: playerColor(self.id),

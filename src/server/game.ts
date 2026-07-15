@@ -16,7 +16,10 @@ import { dist } from '../shared/math.ts';
 import { applyDamage, stepPlayer } from '../shared/step.ts';
 import { TUNE, applyTune, tuneSnapshot } from '../shared/tuning.ts';
 import { appendRoundStats, gunStat } from './stats.ts';
-import { nameUsable } from './names.ts';
+import { isReserved, nameUsable } from './names.ts';
+import { savedSkins } from './skinstore.ts';
+import { defaultEquip, skinsFor, validateEquip } from '../shared/skins.ts';
+import type { Equip, SkinComponent } from '../shared/skins.ts';
 import type { GunStats, PlayerRoundStats } from './stats.ts';
 import { DEFAULT_LOADOUT, NADES, SLOT_OPTIONS, WEAPONS, isNadeType, validLoadout } from '../shared/weapons.ts';
 import { World } from '../shared/world.ts';
@@ -90,6 +93,7 @@ interface ServerPlayer {
   jetDive: number;     // ticks of powered dive
   gunStats: Map<string, GunStats>;
   fps: { best: number; avg: number; low1: number };
+  equip: Equip;
   rtt: number;
   pings: Map<number, number>;   // outstanding ping id → sent-at ms
 }
@@ -105,6 +109,15 @@ const BOT_NAMES = [
   'Jesse James', 'Billy the Kid', 'Butch Cassidy', 'Sundance Kid',
   'Doc Holliday', 'Belle Starr', 'Bonnie Parker', 'Clyde Barrow',
 ];
+
+// bots dress themselves from the public wardrobe
+function randomBotEquip(): Equip {
+  const pick = (kind: SkinComponent): string => {
+    const pool = skinsFor(kind, '(B)');
+    return pool[Math.floor(Math.random() * pool.length)].id;
+  };
+  return { torso: pick('torso'), helmet: pick('helmet'), legs: pick('legs'), pack: pick('pack') };
+}
 
 function idleCmd(): InputCmd {
   return {
@@ -242,11 +255,16 @@ export class GameRoom {
         clearTimeout(joinDeadline);
         player = this.createPlayer(conn, name, loadout, nadeType);
         player.lastHeard = this.tick;
+        const saved = isReserved(name) ? savedSkins(name) : undefined;
+        player.equip = validateEquip(msg.skins ?? saved?.equip, name, saved?.kills ?? 0);
+        // only an explicit client outfit overwrites the stored wardrobe
+        if (msg.skins !== undefined) this.persistEquip(player);
         // humans arrive on the deploy screen: dead until they pick a loadout
         player.state.alive = false;
         player.respawnAt = this.tick;
         conn.send(JSON.stringify({
           t: 'welcome', id: player.id, tick: this.tick, tickRate: TICK_RATE, holes: this.world.holes,
+          equip: player.equip,
           map: CURRENT_MAP,
           tune: tuneSnapshot(),
         }));
@@ -281,6 +299,11 @@ export class GameRoom {
           if (validLoadout(msg.loadout)) {
             player.respawnLoadout = msg.loadout;
             if (isNadeType(msg.nadeType)) player.respawnNade = msg.nadeType;
+            if (msg.skins !== undefined) {
+              const saved2 = isReserved(player.name) ? savedSkins(player.name) : undefined;
+              player.equip = validateEquip(msg.skins, player.name, saved2?.kills ?? 0);
+              this.persistEquip(player);
+            }
             player.wantsRespawn = true;
           }
           break;
@@ -334,6 +357,7 @@ export class GameRoom {
       respawnAt: 0, wantsRespawn: false, respawnLoadout: loadout, respawnNade: nadeType,
       protUntil: 0, lastSpawnTick: 0, lastHeard: 0, rtt: 0, pings: new Map(),
       jetUp: 0, jetOd: 0, jetDive: 0, gunStats: new Map(), fps: { best: 0, avg: 0, low1: 0 },
+      equip: defaultEquip(name),
     };
     this.players.set(p.id, p);
     this.spawn(p, loadout, nadeType);
@@ -641,6 +665,12 @@ export class GameRoom {
     this.cpuPeak = Math.max(this.cpuPeak, pct);
   }
 
+  private persistEquip(p: ServerPlayer): void {
+    if (!p.bot && isReserved(p.name)) {
+      process.send?.({ t: 'equip', name: p.name.trim().toLowerCase(), equip: p.equip });
+    }
+  }
+
   private logRoundStats(): void {
     const players: PlayerRoundStats[] = [];
     const guns = new Map<string, GunStats>();
@@ -657,6 +687,11 @@ export class GameRoom {
         agg.shots += s.shots;
         agg.hits += s.hits;
         agg.kills += s.kills;
+      }
+    }
+    for (const p of this.players.values()) {
+      if (!p.bot && p.kills > 0 && isReserved(p.name)) {
+        process.send?.({ t: 'progress', name: p.name.trim().toLowerCase(), kills: p.kills });
       }
     }
     void appendRoundStats({
@@ -852,6 +887,7 @@ export class GameRoom {
       name: alias ? `(B) ${alias}` : this.uniqueName(`(B) Outlaw ${this.nextId}`),
       conn: null,
       bot: { mx: 1, up: false, jump: false, nadeHold: 0, losTicks: 0, wasFalling: false, flareSkip: false, refuel: false, path: [], wpi: 0, goalRight: Math.random() < 0.5, stuck: 0, seq: 0 },
+      equip: randomBotEquip(),
       state: blankState(loadout, this.randomNade()),
       kills: 0, deaths: 0, assists: 0, dmg: 0, recent: [],
       burnTicks: 0, burnBy: -1, blindTicks: 0,
@@ -993,6 +1029,7 @@ export class GameRoom {
   private broadcast(): void {
     const players: NetPlayer[] = [...this.players.values()].map((p) => ({
       ...p.state,
+      skins: p.equip,
       id: p.id, name: p.name, kills: p.kills, deaths: p.deaths, assists: p.assists, dmg: p.dmg,
       burn: p.burnTicks > 0,
       dizzy: p.blindTicks > 0,

@@ -80,6 +80,7 @@ export interface PlayerState {
 
 // What goes over the wire per player in each snapshot.
 export interface NetPlayer extends PlayerState {
+  skins: import('./skins.ts').Equip;   // equipped component skins
   burn: boolean;       // currently on fire (rendering)
   dizzy: boolean;      // flashbang-blinded (rendering)
   id: number;
@@ -132,14 +133,14 @@ export interface Snapshot {
 
 export type C2S =
   | { t: 'admin'; data: unknown }
-  | { t: 'join'; name: string; loadout: Loadout; nadeType: NadeType; pw?: string }
+  | { t: 'join'; name: string; loadout: Loadout; nadeType: NadeType; pw?: string; skins?: unknown }
   | { t: 'in'; cmd: InputCmd }
   | { t: 'perf'; best: number; avg: number; low1: number }
-  | { t: 'respawn'; loadout: Loadout; nadeType: NadeType }
+  | { t: 'respawn'; loadout: Loadout; nadeType: NadeType; skins?: unknown }
   | { t: 'pong'; id: number };
 
 export type S2C =
-  | { t: 'welcome'; id: number; tick: number; tickRate?: number; holes: Hole[]; map?: string; tune?: unknown }
+  | { t: 'welcome'; id: number; tick: number; tickRate?: number; holes: Hole[]; map?: string; tune?: unknown; equip?: import('./skins.ts').Equip }
   | { t: 'tune'; data: unknown }
   | Snapshot
   | { t: 'ping'; id: number }

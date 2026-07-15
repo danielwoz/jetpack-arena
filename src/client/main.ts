@@ -199,11 +199,12 @@ let perfT = 0;
 let lastJoin: { name: string; loadout: Parameters<typeof Net.connect>[1]; nadeType: Parameters<typeof Net.connect>[2]; serverId?: string; pw?: string } | null = null;
 
 const doJoin = (name: string, loadout: Parameters<typeof Net.connect>[1], nadeType: Parameters<typeof Net.connect>[2], serverId?: string, pw?: string, silent = false): void => {
-  Net.connect(name, loadout, nadeType, serverId, pw)
+  Net.connect(name, loadout, nadeType, serverId, pw, ui.getEquipForJoin())
     .then((n) => {
       net = n;
       lastJoin = { name, loadout, nadeType, serverId, pw };
       ui.noteJoined(name, pw);
+      if (n.equip) ui.setEquip(n.equip);
       net.onClose = () => void reconnect();
       net.onSnap = onSnapshot;
       ui.hideDisconnected();
@@ -255,8 +256,8 @@ async function reconnect(): Promise<void> {
   if (lastJoin) doJoin(lastJoin.name, lastJoin.loadout, lastJoin.nadeType, lastJoin.serverId, lastJoin.pw, true);
 }
 
-ui.onRespawn = (loadout, nadeType) => {
-  net?.sendRespawn(loadout, nadeType);
+ui.onRespawn = (loadout, nadeType, skins) => {
+  net?.sendRespawn(loadout, nadeType, skins);
 };
 
 function onSnapshot(snap: Snapshot): void {
@@ -610,6 +611,7 @@ function render(dtSec: number, alpha: number): void {
     ? {
         id: net.myId,
         name: netSelf?.name ?? '',
+        skins: ui.getEquip(),
         x: rx,
         y: ry,
         aim: st.aim,

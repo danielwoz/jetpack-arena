@@ -1,5 +1,6 @@
 import { setTickRate, INTERP_DELAY_TICKS, TICK_MS } from '../shared/constants.ts';
 import type { C2S, InputCmd, Loadout, NadeType, S2C, Snapshot } from '../shared/types.ts';
+import type { Equip } from '../shared/skins.ts';
 import { world } from './world.ts';
 import { applyTune } from '../shared/tuning.ts';
 import { setMap } from '../shared/map.ts';
@@ -19,6 +20,7 @@ function serverUrl(serverId?: string): string {
 }
 
 export class Net {
+  equip: Equip | null = null;   // server-resolved outfit from the welcome
   myId = -1;
   theme = 'city';
   onSnap: (s: Snapshot) => void = () => {};
@@ -30,14 +32,14 @@ export class Net {
   // each snapshot's tick to absorb jitter.
   private estTick = -1;
 
-  static connect(name: string, loadout: Loadout, nadeType: NadeType, serverId?: string, pw?: string): Promise<Net> {
+  static connect(name: string, loadout: Loadout, nadeType: NadeType, serverId?: string, pw?: string, skins?: Equip): Promise<Net> {
     return new Promise((resolve, reject) => {
       const net = new Net();
       const ws = new WebSocket(serverUrl(serverId));
       net.ws = ws;
       let welcomed = false;
 
-      ws.onopen = () => net.send({ t: 'join', name, loadout, nadeType, pw });
+      ws.onopen = () => net.send({ t: 'join', name, loadout, nadeType, pw, skins });
       ws.onerror = () => { if (!welcomed) reject(new Error('could not reach server')); };
       ws.onclose = () => {
         if (!welcomed) reject(new Error('connection closed'));
@@ -53,6 +55,7 @@ export class Net {
             net.theme = msg.map ?? 'city';
             setMap(net.theme);
             net.myId = msg.id;
+            net.equip = msg.equip ?? null;
             net.estTick = msg.tick;
             world.setHoles(msg.holes);   // craters that predate this client
             welcomed = true;
@@ -108,8 +111,8 @@ export class Net {
     this.send({ t: 'perf', best, avg, low1 });
   }
 
-  sendRespawn(loadout: Loadout, nadeType: NadeType): void {
-    this.send({ t: 'respawn', loadout, nadeType });
+  sendRespawn(loadout: Loadout, nadeType: NadeType, skins?: Equip): void {
+    this.send({ t: 'respawn', loadout, nadeType, skins });
   }
 
   private send(msg: C2S): void {

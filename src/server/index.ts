@@ -5,6 +5,8 @@ import { fork } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { serveStatic } from './static.ts';
 import { deleteName, isReserved, reserveName } from './names.ts';
+import { addKills, storeEquip } from './skinstore.ts';
+import type { Equip } from '../shared/skins.ts';
 
 // Lobby / room manager. Each game room runs in its own forked process (one
 // core each); this process serves the client, exposes the server browser at
@@ -62,8 +64,10 @@ function spawnRoom(botTarget: number): Room {
     env: { ...process.env, SERVER_NAME: name, BOTS: String(botTarget), PORT: '' },
   });
   const room: Room = { id, name, botTarget, proc, port: 0, status: null, emptySince: Date.now() };
-  proc.on('message', (msg: { t?: string; port?: number } & Partial<RoomStatus>) => {
+  proc.on('message', (msg: { t?: string; port?: number; name?: string; equip?: Equip; kills?: number } & Partial<RoomStatus>) => {
     if (msg.t === 'ready' && msg.port) room.port = msg.port;
+    else if (msg.t === 'equip' && msg.name && msg.equip) storeEquip(msg.name, msg.equip);
+    else if (msg.t === 'progress' && msg.name) addKills(msg.name, msg.kills ?? 0);
     else if (msg.t === 'status') {
       room.status = msg as unknown as RoomStatus;
       if (room.status.humans > 0) room.emptySince = 0;

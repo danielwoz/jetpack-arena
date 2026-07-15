@@ -5,6 +5,7 @@ import type { NetPlayer, Snapshot, WeaponId } from '../shared/types.ts';
 export interface RenderPlayer {
   id: number;
   name: string;
+  skins?: import('../shared/skins.ts').Equip;
   x: number;
   y: number;
   aim: number;
@@ -37,7 +38,7 @@ const MAX_EXTRAP_TICKS = 3;
 
 function toRender(p: NetPlayer, x: number, y: number, aim: number): RenderPlayer {
   return {
-    id: p.id, name: p.name, x, y, aim,
+    id: p.id, name: p.name, skins: p.skins, x, y, aim,
     alive: p.alive, weapon: p.weapon, hp: p.hp, prot: p.prot,
     jetU: p.jetU, jetD: p.jetD,
     priming: p.prime > 0, healing: p.bandage > 0, bandageT: 0, reloadT: 0, primeT: 0, burning: p.burn, dizzy: p.dizzy,

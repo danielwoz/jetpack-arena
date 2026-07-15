@@ -1046,3 +1046,12 @@ button.pad-focus {
 .namechip button:hover { color: #ff8080; }
 #pwrow { margin-top: 8px; }
 #pwrow input { text-align: center; letter-spacing: 0.3em; }
+
+/* ---- skin picker on the deploy/respawn screen */
+#skinbar { display: flex; gap: 14px; align-items: flex-start; justify-content: center; margin: 6px 0 10px; }
+#skinpreview { background: rgba(20, 28, 52, 0.6); border: 1px solid #24304e; border-radius: 6px; }
+#skinrows { display: flex; flex-direction: column; gap: 5px; text-align: left; }
+.skinrow { display: flex; align-items: center; gap: 6px; }
+.skinrow .skinlabel { width: 64px; font-size: 10px; letter-spacing: 0.12em; color: #5c6f96; }
+.skinsw { width: 18px; height: 18px; border-radius: 4px; border: 1px solid #24304e; cursor: pointer; padding: 0; }
+.skinsw.selected { outline: 2px solid #4dd7ff; }

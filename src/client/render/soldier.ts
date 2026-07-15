@@ -4,6 +4,8 @@
 // Painted at 6 px per world unit; the player hitbox is 28×56 world units.
 
 import type { WeaponId } from '../../shared/types.ts';
+import { RECOLOR_PAINTS, skinById } from '../../shared/skins.ts';
+import type { Equip } from '../../shared/skins.ts';
 
 const S = 6;                       // px per world unit
 const ATLAS_W = 2048;
@@ -1678,6 +1680,74 @@ export function buildComponentCell(kind: ComponentKind, camoIdx: number, flags: 
   GOLD = false;
   SILVER = false;
   return canvas;
+}
+
+// resolve a skin paint (camo index, special, or parametric recolor) to a palette
+const RECOLOR_CACHE = new Map<string, CamoColors>();
+
+export function paletteFor(paint: number | string): CamoColors {
+  if (typeof paint === 'number') return CAMOS[((paint % CAMOS.length) + CAMOS.length) % CAMOS.length];
+  if (paint === 'pink') return PINK;
+  if (paint === 'silver') return SILVER_PAL;
+  const rc = RECOLOR_PAINTS[paint];
+  if (rc) {
+    let pal = RECOLOR_CACHE.get(paint);
+    if (!pal) {
+      pal = makeCamo(rc[0], rc[1], rc[2]);
+      RECOLOR_CACHE.set(paint, pal);
+    }
+    return pal;
+  }
+  return CAMOS[0];
+}
+
+// paint a soldier whose torso, helmet, legs and pack are skinned
+// independently — the heart of the mix-and-match wardrobe
+export function buildEquipVariant(eq: Equip): BodyVariant {
+  const W = 2048, H = 352;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  const uv = (x: number, y: number, w: number, h: number) =>
+    ({ u0: x / W, v0: y / H, u1: (x + w) / W, v1: (y + h) / H });
+
+  const part = (id: string): { pal: CamoColors; paint: number | string } => {
+    const def = skinById(id);
+    const paint = def?.paint ?? 0;
+    return { pal: paletteFor(paint as number | string), paint: paint as number | string };
+  };
+
+  const torso = part(eq.torso);
+  const helmet = part(eq.helmet);
+  const legs = part(eq.legs);
+  const pack = part(eq.pack);
+
+  SILVER = torso.paint === 'silver';
+  PAL = pack.pal;
+  paintPack(ctx);
+  PAL = torso.pal;
+  paintBodyCore(ctx);
+  paintHead(ctx);
+  PAL = helmet.pal;
+  GOLD = helmet.paint === 'gold';
+  FLORAL = helmet.paint === 'floral';
+  if (helmet.paint === 'silver') { SILVER = true; }
+  paintHeadgear(ctx);
+  SILVER = legs.paint === 'silver';
+  PAL = legs.pal;
+  const torsoMeta: SpriteMeta = { ...uv(0, 0, 264, 348), wx0: -22, wy0: -45, wx1: 22, wy1: 13 };
+  const legMetas: SpriteMeta[] = legPoses().map((pose, i) => {
+    const x = 272 + i * 176;
+    paintLegs(ctx, x, 0, pose);
+    return { ...uv(x, 0, 168, 162), wx0: -14, wy0: 2, wx1: 14, wy1: 29 };
+  });
+
+  PAL = CAMOS[0];
+  FLORAL = false;
+  GOLD = false;
+  SILVER = false;
+  return { canvas, torso: torsoMeta, legs: legMetas };
 }
 
 export function buildBodyVariant(camoIdx: number, flags: BodyFlags = {}): BodyVariant {

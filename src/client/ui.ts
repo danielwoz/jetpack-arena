@@ -5,6 +5,9 @@ import { ACTIONS, ACTION_LABELS, bindings } from './bindings.ts';
 import { audio } from './audio.ts';
 import { gamepad } from './gamepad.ts';
 import { getRenderScale, setRenderScale } from './render/gl.ts';
+import { buildEquipVariant, paletteFor } from './render/soldier.ts';
+import { defaultEquip, skinsFor, validateEquip } from '../shared/skins.ts';
+import type { Equip, SkinComponent } from '../shared/skins.ts';
 import { TUNE, WEAPON_TUNABLE } from '../shared/tuning.ts';
 
 function el<T extends HTMLElement>(id: string): T {
@@ -286,8 +289,8 @@ export class Ui {
   private padBindrowIndex = -1;
   private padControlsBtnIndex = -1;
 
-  onJoin: (name: string, loadout: Loadout, nadeType: NadeType, serverId?: string, pw?: string) => void = () => {};
-  onRespawn: (loadout: Loadout, nadeType: NadeType) => void = () => {};
+  onJoin: (name: string, loadout: Loadout, nadeType: NadeType, serverId?: string, pw?: string, skins?: Equip) => void = () => {};
+  onRespawn: (loadout: Loadout, nadeType: NadeType, skins?: Equip) => void = () => {};
   onCaptureChange: (capturing: boolean) => void = () => {};
 
   private buildBindList(list: HTMLDivElement): void {
@@ -1118,7 +1121,7 @@ export class Ui {
       this.joinStatus.textContent = 'connecting…';
       const typedPw = el<HTMLInputElement>('namepw').value.trim();
       const pw = this.savedPwFor(name) ?? (typedPw || undefined);
-      this.onJoin(name, [...this.loadout] as Loadout, this.nadeSel.nade, this.selectedServer ?? undefined, pw);
+      this.onJoin(name, [...this.loadout] as Loadout, this.nadeSel.nade, this.selectedServer ?? undefined, pw, this.getEquip());
     });
 
     el<HTMLButtonElement>('reservebtn').addEventListener('click', () => {
@@ -1154,7 +1157,7 @@ export class Ui {
       if (performance.now() < this.respawnReadyAt) return;
       this.respawnBtn.disabled = true;
       this.respawnBtn.textContent = 'DEPLOYING…';
-      this.onRespawn([...this.loadout] as Loadout, this.nadeSel.nade);
+      this.onRespawn([...this.loadout] as Loadout, this.nadeSel.nade, this.getEquip());
     });
   }
 
@@ -1173,6 +1176,7 @@ export class Ui {
   }
 
   showDeath(killerName: string | null, instant = false): void {
+    this.buildSkinPicker();
     buildLoadoutPicker(this.deathWeapons, this.loadout, this.nadeSel);
     this.focusPickerSelected(this.deathWeapons, this.deathCursor);
     this.deathMsg.textContent = killerName ? `ELIMINATED BY ${killerName.toUpperCase()}` : 'YOU DIED';
@@ -1271,6 +1275,93 @@ export class Ui {
       chip.append(label, forget, free);
       box.appendChild(chip);
     }
+  }
+
+  // ---- equipped skins (cookie-persisted; server copy wins for reserved names)
+  private equip: Equip = (() => {
+    const m = document.cookie.match(/(?:^|; )ja_equip=([^;]*)/);
+    if (m) {
+      try {
+        return validateEquip(JSON.parse(decodeURIComponent(m[1])), localStorage.getItem('callsign') ?? 'pilot');
+      } catch { /* fall through */ }
+    }
+    return defaultEquip(localStorage.getItem('callsign') ?? 'pilot');
+  })();
+
+  // true once this machine holds a deliberate outfit (cookie or a pick)
+  private equipTouched = document.cookie.includes('ja_equip=');
+
+  getEquip(): Equip {
+    return { ...this.equip };
+  }
+
+  // for the join message: undefined lets the server-stored outfit win on a
+  // machine that never chose anything
+  getEquipForJoin(): Equip | undefined {
+    return this.equipTouched ? this.getEquip() : undefined;
+  }
+
+  setEquip(eq: Equip): void {
+    this.equip = validateEquip(eq, this.nameInput.value.trim() || 'pilot');
+    this.equipTouched = true;
+    this.saveEquipCookie();
+    this.buildSkinPicker();
+  }
+
+  private saveEquipCookie(): void {
+    document.cookie = `ja_equip=${encodeURIComponent(JSON.stringify(this.equip))}; max-age=31536000; path=/; SameSite=Lax`;
+  }
+
+  private buildSkinPicker(): void {
+    const rows = el<HTMLDivElement>('skinrows');
+    const name = this.nameInput.value.trim() || localStorage.getItem('callsign') || 'pilot';
+    this.equip = validateEquip(this.equip, name);
+    rows.innerHTML = '';
+    const KINDS: [SkinComponent, keyof Equip, string][] = [
+      ['helmet', 'helmet', 'HELMET'],
+      ['torso', 'torso', 'TORSO'],
+      ['legs', 'legs', 'LEGS'],
+      ['pack', 'pack', 'JETPACK'],
+    ];
+    for (const [kind, field, label] of KINDS) {
+      const row = document.createElement('div');
+      row.className = 'skinrow';
+      const lab = document.createElement('span');
+      lab.className = 'skinlabel';
+      lab.textContent = label;
+      row.appendChild(lab);
+      for (const def of skinsFor(kind, name)) {
+        const sw = document.createElement('button');
+        sw.className = 'skinsw' + (this.equip[field] === def.id ? ' selected' : '');
+        sw.title = def.name;
+        sw.style.background = def.paint === 'gold' ? '#e8c34a'
+          : def.paint === 'floral' ? '#f2f2ff'
+          : def.paint === 'silver' ? '#cfd6de'
+          : paletteFor(def.paint as number | string).base;
+        sw.addEventListener('click', () => {
+          this.equip[field] = def.id;
+          this.equipTouched = true;
+          this.saveEquipCookie();
+          this.buildSkinPicker();
+        });
+        row.appendChild(sw);
+      }
+      rows.appendChild(row);
+    }
+    this.renderSkinPreview();
+  }
+
+  private renderSkinPreview(): void {
+    const cv = el<HTMLCanvasElement>('skinpreview');
+    const ctx = cv.getContext('2d')!;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const v = buildEquipVariant(this.equip);
+    const k = 2.2;   // px per world unit; body spans 44x74 world units
+    const px = (wx: number): number => (wx + 22) * k + 9;
+    const py = (wy: number): number => (wy + 45) * k + 8;
+    // legs (idle pose), then torso over them — same layering as in-game
+    ctx.drawImage(v.canvas, 272, 0, 168, 162, px(-14), py(2), 28 * k, 27 * k);
+    ctx.drawImage(v.canvas, 0, 0, 264, 348, px(-22), py(-45), 44 * k, 58 * k);
   }
 
   private selectedServer: string | null = null;
