@@ -10,10 +10,11 @@ import {
   makeConcreteTexture, makeMetalTexture, makeNebulaTexture, makePlanetTexture,
   makeRockTexture,
 } from './textures.ts';
-import { CAMO_COUNT, buildEquipVariant, buildSoldierAtlas } from './soldier.ts';
-import { defaultEquip } from '../../shared/skins.ts';
+import { CAMO_COUNT, buildEquipVariant, buildEquipVariantAI, buildSoldierAtlas, buildGunSkinAtlas } from './soldier.ts';
+import type { AiParts } from './soldier.ts';
+import { defaultEquip, equipUsesAi, hasSilverGun, gunVariantFor, skinById } from '../../shared/skins.ts';
 import type { Equip } from '../../shared/skins.ts';
-import type { BodyVariant, SoldierAtlas, SpriteMeta } from './soldier.ts';
+import type { BodyVariant, GunMeta, SoldierAtlas, SpriteMeta } from './soldier.ts';
 import { world } from '../world.ts';
 import type { RenderNade } from '../interp.ts';
 import type { NetFire } from '../../shared/types.ts';
@@ -25,10 +26,36 @@ interface SceneTex {
   nebula: Texture;
   planet: Texture;
   soldier: Texture;
+  gunSilver: Texture;      // chrome gun atlas for mutant/smock/mk47
+}
+
+// desaturate + cool-remap a soldier atlas so its guns read as polished chrome
+function chromeCanvas(src: HTMLCanvasElement | HTMLImageElement): HTMLCanvasElement {
+  const w = (src as HTMLCanvasElement).width || (src as HTMLImageElement).naturalWidth;
+  const h = (src as HTMLCanvasElement).height || (src as HTMLImageElement).naturalHeight;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d')!;
+  ctx.drawImage(src, 0, 0);
+  const im = ctx.getImageData(0, 0, w, h);
+  const d = im.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 8) continue;
+    const l = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) / 255;
+    const v = Math.min(1, Math.max(0, (l - 0.33) * 1.8 + 0.52));   // punchier chrome ramp
+    d[i] = Math.round(198 * v + 34);
+    d[i + 1] = Math.round(208 * v + 38);
+    d[i + 2] = Math.round(224 * v + 44);
+  }
+  ctx.putImageData(im, 0, 0);
+  return c;
 }
 
 let TEX: SceneTex | null = null;
 let ATLAS: SoldierAtlas | null = null;
+// AI gun-skin atlas: each weapon's featured finish + name-locked gold/silver.
+// Built asynchronously from shipped webps; until ready, guns render procedurally.
+let GUNSKINS: { tex: Texture; metas: Record<string, GunMeta> } | null = null;
 
 // ---- Pandora theme: alien-jungle reskin. The server's welcome message
 // picks the default; a ?theme= URL param overrides for testing.
@@ -95,16 +122,71 @@ function aiFileFor(eq: Equip): string | null {
 }
 
 export function bodyForEquip(r: Renderer, eq: Equip): BodyTex {
-  const key = `${eq.torso}|${eq.helmet}|${eq.legs}|${eq.pack}`;
+  const key = `${eq.torso}|${eq.helmet}|${eq.legs}|${eq.pack}|${eq.head ?? ''}`;
   let b = BODIES.get(key);
   if (!b) {
     const v: BodyVariant = buildEquipVariant(eq);
     b = { tex: r.createTexture(v.canvas, false), torso: v.torso, legs: v.legs };
     BODIES.set(key, b);
-    const file = aiFileFor(eq);
-    if (file !== null) attachAiBody(r, b, file);
+    if (equipUsesAi(eq)) {
+      attachAiEquip(r, b, eq);
+    } else {
+      const file = aiFileFor(eq);
+      if (file !== null) attachAiBody(r, b, file);
+    }
   }
   return b;
+}
+
+// cache of baked component images (156x231 webp cells)
+const AI_IMGS = new Map<string, Promise<HTMLImageElement | null>>();
+
+function aiImage(file: string): Promise<HTMLImageElement | null> {
+  let p = AI_IMGS.get(file);
+  if (!p) {
+    p = new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = `/skins/${file}`;
+    });
+    AI_IMGS.set(file, p);
+  }
+  return p;
+}
+
+// load the outfit's baked components, composite them with the procedural
+// parts and swap the body texture in place (fallback stays until then)
+function attachAiEquip(r: Renderer, b: BodyTex, eq: Equip): void {
+  void loadEquipImages(eq).then((parts) => {
+    const v = buildEquipVariantAI(eq, parts);
+    b.tex = r.createTexture(v.canvas, false);
+    b.torso = v.torso;
+    b.legs = v.legs;
+  });
+}
+
+// shared loader for a full outfit's baked components (used by rendering + picker)
+export function loadEquipImages(eq: Equip): Promise<AiParts> {
+  const headDef = eq.head ? skinById(eq.head) : undefined;
+  const torsoDef = skinById(eq.torso);
+  const helmDef = skinById(eq.helmet);
+  const legsDef = skinById(eq.legs);
+  const packDef = skinById(eq.pack);
+  const fem = eq.head.startsWith('f');
+  const vestFile = torsoDef?.file
+    ? (fem ? torsoDef.file.replace('.webp', '_f.webp') : torsoDef.file)
+    : undefined;
+  return Promise.all([
+    headDef?.file ? aiImage(headDef.file) : Promise.resolve(null),
+    vestFile ? aiImage(vestFile) : Promise.resolve(null),
+    helmDef?.file ? aiImage(helmDef.file) : Promise.resolve(null),
+    packDef?.file ? aiImage(packDef.file) : Promise.resolve(null),
+    legsDef?.file ? aiImage(legsDef.file) : Promise.resolve(null),
+  ]).then(([head, vest, helmet, pack, legs]) => ({
+    head: head ?? undefined, vest: vest ?? undefined, helmet: helmet ?? undefined,
+    pack: pack ?? undefined, legs: legs ?? undefined,
+  }));
 }
 
 function attachAiBody(r: Renderer, b: BodyTex, idx: number | string): void {
@@ -144,13 +226,24 @@ export function ensureTextures(r: Renderer): SceneTex {
       nebula: r.createTexture(makeNebulaTexture(), false),
       planet: r.createTexture(makePlanetTexture(), false),
       soldier: r.createTexture(ATLAS.canvas, false),
+      gunSilver: r.createTexture(chromeCanvas(ATLAS.canvas), false),
     };
     upgradeTex(r, '/tex/rock.webp', true, (t) => { TEX!.rock = t; });
     upgradeTex(r, '/tex/metal.webp', true, (t) => { TEX!.metal = t; });
     upgradeTex(r, '/tex/concrete.webp', true, (t) => { TEX!.concrete = t; });
     upgradeTex(r, '/tex/nebula.webp', false, (t) => { TEX!.nebula = t; });
     upgradeTex(r, '/tex/planet.webp', false, (t) => { TEX!.planet = t; });
-    upgradeTex(r, '/tex/guns.webp', false, (t) => { TEX!.soldier = t; });
+    // upgrade both the normal and the chrome gun atlas from the shipped webp
+    { const img = new Image(); img.onload = () => {
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      c.getContext('2d')!.drawImage(img, 0, 0);
+      TEX!.soldier = r.createTexture(c, false);
+      TEX!.gunSilver = r.createTexture(chromeCanvas(c), false);
+    }; img.src = '/tex/guns.webp'; }
+    // composite the AI gun skins (arm + finish) into their own atlas texture
+    buildGunSkinAtlas(ATLAS.guns).then((a) => {
+      GUNSKINS = { tex: r.createTexture(a.canvas, false), metas: a.metas };
+    }).catch(() => {});
     upgradeTex(r, '/tex/facades.webp', false, (t) => { FACADES = t; });
     fetch('/tex/facades.json').then((res) => res.json())
       .then((a: number[]) => { FACADE_ASPECTS = a; })
@@ -162,7 +255,7 @@ export function ensureTextures(r: Renderer): SceneTex {
     void themeRenderer;
     // pre-bake the twelve uniform outfits so new players don't hitch mid-fight
     for (let i = 0; i < CAMO_COUNT; i++) {
-      bodyForEquip(r, { torso: `t${i}`, helmet: `h${i}`, legs: `l${i}`, pack: `p${i}` });
+      bodyForEquip(r, { torso: `t${i}`, helmet: `h${i}`, legs: `l${i}`, pack: `p${i}`, head: '' });
     }
   }
   return TEX;
@@ -889,8 +982,18 @@ function drawSoldier(r: Renderer, p: SoldierPose, dt: number, t: number, tex: Sc
   sprite(r, frame, p.x, p.y, dir < 0);
   sprite(r, body.torso, p.x, p.y, face < 0);
 
-  r.setTexture(tex.soldier);
-  const g = A.guns[p.weapon];
+  // prefer the AI gun skin (weapon's featured finish, or name-locked gold/silver)
+  // when it has loaded and shipped a cell for this weapon; else procedural chrome/base
+  const variant = gunVariantFor(p.name);
+  const skin = GUNSKINS ? GUNSKINS.metas[`${p.weapon}:${variant}`] : undefined;
+  let g: GunMeta;
+  if (skin) {
+    r.setTexture(GUNSKINS!.tex);
+    g = skin;
+  } else {
+    r.setTexture(hasSilverGun(p.name) ? tex.gunSilver : tex.soldier);
+    g = A.guns[p.weapon];
+  }
   const sx = p.x + A.shoulder[0] * face;
   const sy = p.y + A.shoulder[1];
   if (face > 0) {

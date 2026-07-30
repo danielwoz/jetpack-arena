@@ -6,6 +6,7 @@
 import type { WeaponId } from '../../shared/types.ts';
 import { RECOLOR_PAINTS, skinById } from '../../shared/skins.ts';
 import type { Equip } from '../../shared/skins.ts';
+import { SKIN_MANIFEST } from '../../shared/skins-manifest.ts';
 
 const S = 6;                       // px per world unit
 const ATLAS_W = 2048;
@@ -1659,7 +1660,7 @@ export interface BodyFlags {
   silver?: boolean;
 }
 
-export type ComponentKind = 'pack' | 'body' | 'head';
+export type ComponentKind = 'pack' | 'body' | 'head' | 'face' | 'core';
 
 // paint a single torso component alone in a 264×348 cell (AI pipeline input)
 export function buildComponentCell(kind: ComponentKind, camoIdx: number, flags: BodyFlags = {}): HTMLCanvasElement {
@@ -1674,6 +1675,8 @@ export function buildComponentCell(kind: ComponentKind, camoIdx: number, flags: 
   SILVER = flags.silver ?? false;
   if (kind === 'pack') paintPack(ctx);
   else if (kind === 'body') { paintBodyCore(ctx); paintHead(ctx); }
+  else if (kind === 'face') paintHead(ctx);
+  else if (kind === 'core') paintBodyCore(ctx);
   else paintHeadgear(ctx);
   PAL = CAMOS[0];
   FLORAL = false;
@@ -1743,6 +1746,84 @@ export function buildEquipVariant(eq: Equip): BodyVariant {
     return { ...uv(x, 0, 168, 162), wx0: -14, wy0: 2, wx1: 14, wy1: 29 };
   });
 
+  PAL = CAMOS[0];
+  FLORAL = false;
+  GOLD = false;
+  SILVER = false;
+  return { canvas, torso: torsoMeta, legs: legMetas };
+}
+
+// composite the baked AI component cells (head/vest/helmet webp, one shared
+// cell wx -26..26 / wy -64..13 at 3 px/unit) with procedurally painted pack,
+// legacy parts and legs. Draw order matches the art pipeline: head behind the
+// pack (hair tucks away), then pack, vest, helmet.
+export interface AiParts {
+  head?: HTMLImageElement; vest?: HTMLImageElement; helmet?: HTMLImageElement;
+  pack?: HTMLImageElement; legs?: HTMLImageElement;   // legs = 10-frame strip
+}
+
+export function buildEquipVariantAI(eq: Equip, parts: AiParts): BodyVariant {
+  const W = 2080, H = 472;
+  const CW = 312, CH = 462;              // AI cell at 6 px/unit
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  const uv = (x: number, y: number, w: number, h: number) =>
+    ({ u0: x / W, v0: y / H, u1: (x + w) / W, v1: (y + h) / H });
+
+  const part = (id: string): { pal: CamoColors; paint: number | string } => {
+    const def = skinById(id);
+    const paint = def?.paint ?? 0;
+    return { pal: paletteFor(paint as number | string), paint: paint as number | string };
+  };
+  const torso = part(eq.torso);
+  const helmet = part(eq.helmet);
+  const legs = part(eq.legs);
+  const pack = part(eq.pack);
+  const cell = (img: HTMLImageElement): void => { ctx.drawImage(img, 0, 0, CW, CH); };
+  // legacy painters draw in old-cell coords (wx-22, wy-45 at origin)
+  const legacy = (fn: () => void): void => {
+    ctx.save();
+    ctx.translate(24, 114);
+    fn();
+    ctx.restore();
+  };
+
+  if (parts.head) cell(parts.head);
+  if (parts.pack) {
+    cell(parts.pack);
+  } else {
+    PAL = pack.pal;
+    SILVER = torso.paint === 'silver';
+    legacy(() => paintPack(ctx));
+  }
+  if (!parts.vest) {
+    PAL = torso.pal;
+    legacy(() => paintBodyCore(ctx));
+  }
+  if (!parts.head) legacy(() => paintHead(ctx));
+  if (parts.vest) cell(parts.vest);
+  if (parts.helmet) {
+    cell(parts.helmet);
+  } else if (eq.helmet) {
+    PAL = helmet.pal;
+    GOLD = helmet.paint === 'gold';
+    FLORAL = helmet.paint === 'floral';
+    if (helmet.paint === 'silver') SILVER = true;
+    legacy(() => paintHeadgear(ctx));
+  }
+  SILVER = legs.paint === 'silver';
+  PAL = legs.pal;
+  const torsoMeta: SpriteMeta = { ...uv(0, 0, CW, CH), wx0: -26, wy0: -64, wx1: 26, wy1: 13 };
+  const ls = parts.legs;
+  const lfw = ls ? ls.width / 10 : 0;
+  const legMetas: SpriteMeta[] = legPoses().map((pose, i) => {
+    const x = 320 + i * 176;
+    if (ls) ctx.drawImage(ls, i * lfw, 0, lfw, ls.height, x, 0, 168, 162);
+    else paintLegs(ctx, x, 0, pose);
+    return { ...uv(x, 0, 168, 162), wx0: -14, wy0: 2, wx1: 14, wy1: 29 };
+  });
   PAL = CAMOS[0];
   FLORAL = false;
   GOLD = false;
@@ -1917,4 +1998,74 @@ export function buildGunIconDataUrls(includeArms = false): Record<WeaponId, stri
     out[id] = icon.toDataURL('image/png');
   });
   return out;
+}
+
+// ---- AI gun skins ---------------------------------------------------------
+// Each shipped skin is a trimmed, muzzle-right gun photo. We composite it with
+// the generic gripping arms into a 420×180 cell that matches the procedural gun
+// geometry, so the renderer swaps texture + UV using the same pivot and muzzle.
+export interface GunSkinAtlas {
+  canvas: HTMLCanvasElement;
+  metas: Record<string, GunMeta>;        // key `${model}:${variant}`
+}
+
+function loadImg(url: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = () => resolve(null);
+    im.src = url;
+  });
+}
+
+function drawSkinGun(ctx: Ctx, img: HTMLImageElement, base: GunMeta | undefined): void {
+  const muzzlePx = base ? base.muzzle * S + GP.x : 360;
+  const targetLen = muzzlePx - (GP.x - 56);              // stock sits ~56px behind the grip
+  const scale = targetLen / img.width;
+  const gw = targetLen;
+  const gh = img.height * scale;
+  const gx = muzzlePx - gw;                               // right edge (trimmed muzzle) at muzzlePx
+  const gy = GP.y - gh / 2;                               // barrel centred on the grip line
+  // support arm behind the gun, hand out on the fore-grip
+  arm(ctx, GP.x - 52, GP.y - 15, GP.x + 6, GP.y + 18, GP.x + Math.min(gw * 0.42, 150), GP.y + 6, true);
+  ctx.drawImage(img, gx, gy, gw, gh);
+  // trigger arm in front, hand at the grip
+  arm(ctx, GP.x - 50, GP.y - 12, GP.x - 16, GP.y + 10, GP.x + 4, GP.y + 12, false);
+}
+
+export async function buildGunSkinAtlas(baseGuns: Record<WeaponId, GunMeta>): Promise<GunSkinAtlas> {
+  const jobs: { model: string; variant: string; url: string }[] = [];
+  const guns = (SKIN_MANIFEST as { guns?: Record<string, readonly string[]> }).guns ?? {};
+  for (const model in guns) {
+    for (const variant of guns[model]) {
+      const file = variant === 'def' ? model : `${model}_${variant}`;
+      jobs.push({ model, variant, url: `/skins/guns/${file}.webp` });
+    }
+  }
+  const imgs = await Promise.all(jobs.map((j) => loadImg(j.url)));
+  const CW = 420, CH = 180, COLS = 6;
+  const rows = Math.max(1, Math.ceil(jobs.length / COLS));
+  const canvas = document.createElement('canvas');
+  canvas.width = COLS * CW;
+  canvas.height = rows * CH;
+  const AW = canvas.width, AH = canvas.height;
+  const ctx = canvas.getContext('2d')!;
+  const metas: Record<string, GunMeta> = {};
+  jobs.forEach((j, i) => {
+    const img = imgs[i];
+    if (!img) return;
+    const cx = (i % COLS) * CW, cy = Math.floor(i / COLS) * CH;
+    ctx.save();
+    ctx.translate(cx, cy);
+    const base = baseGuns[j.model as WeaponId];
+    drawSkinGun(ctx, img, base);
+    ctx.restore();
+    metas[`${j.model}:${j.variant}`] = {
+      u0: cx / AW, v0: cy / AH, u1: (cx + CW) / AW, v1: (cy + CH) / AH,
+      lx0: base ? base.lx0 : -GP.x / S, ly0: base ? base.ly0 : -GP.y / S,
+      lx1: base ? base.lx1 : (CW - GP.x) / S, ly1: base ? base.ly1 : (CH - GP.y) / S,
+      muzzle: base ? base.muzzle : (CW - GP.x) / S,
+    };
+  });
+  return { canvas, metas };
 }

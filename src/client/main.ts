@@ -132,6 +132,9 @@ if (new URLSearchParams(location.search).has('cells')) {
         out[`legs_${v}_${i}`] = grab(b.canvas, 272 + i * 176, 0, 168, 162);
       }
     }
+    out['face_base'] = cellOf(S.buildComponentCell('face', 0));
+    out['core_base'] = cellOf(S.buildComponentCell('core', 0));
+    out['atlas_base'] = S.buildBodyVariant(0, {}).canvas.toDataURL('image/png');
     out['pack_default'] = cellOf(S.buildComponentCell('pack', 0));
     out['pack_pink'] = cellOf(S.buildComponentCell('pack', -1));
     // easter eggs: gold/floral/silver headgear, full-silver uniform

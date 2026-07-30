@@ -116,7 +116,9 @@ function randomBotEquip(): Equip {
     const pool = skinsFor(kind, '(B)');
     return pool[Math.floor(Math.random() * pool.length)].id;
   };
-  return { torso: pick('torso'), helmet: pick('helmet'), legs: pick('legs'), pack: pick('pack') };
+  // bots wear the new photoreal heads too — an empty head stays classic
+  const head = Math.random() < 0.7 ? pick('head') : '';
+  return { torso: pick('torso'), helmet: pick('helmet'), legs: pick('legs'), pack: pick('pack'), head };
 }
 
 function idleCmd(): InputCmd {

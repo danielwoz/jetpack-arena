@@ -5,9 +5,13 @@ import { ACTIONS, ACTION_LABELS, bindings } from './bindings.ts';
 import { audio } from './audio.ts';
 import { gamepad } from './gamepad.ts';
 import { getRenderScale, setRenderScale } from './render/gl.ts';
-import { buildEquipVariant, paletteFor } from './render/soldier.ts';
-import { defaultEquip, skinById, skinsFor, validateEquip } from '../shared/skins.ts';
+import { buildEquipVariant, buildEquipVariantAI, paletteFor } from './render/soldier.ts';
+import type { SpriteMeta } from './render/soldier.ts';
+import { loadEquipImages } from './render/scene.ts';
+import { defaultEquip, equipUsesAi, randomHeadId, skinById, skinsFor, validateEquip } from '../shared/skins.ts';
 import type { Equip, SkinComponent } from '../shared/skins.ts';
+
+type SpriteMetaLike = Pick<SpriteMeta, 'u0' | 'v0' | 'u1' | 'v1' | 'wx0' | 'wy0' | 'wx1' | 'wy1'>;
 import { TUNE, WEAPON_TUNABLE } from '../shared/tuning.ts';
 
 function el<T extends HTMLElement>(id: string): T {
@@ -1155,7 +1159,9 @@ export class Ui {
       this.renderNameChips();
       const name = this.nameInput.value.trim() || 'pilot';
       if (!this.equipTouched) {
+        const keepHead = this.equip.head || randomHeadId();   // don't churn the face while typing
         this.equip = defaultEquip(name);
+        this.equip.head = keepHead;
       } else {
         // newly-earned special pieces select themselves — they are the point
         const before = defaultEquip(prevName.trim() || 'pilot');
@@ -1297,13 +1303,20 @@ export class Ui {
 
   // ---- equipped skins (cookie-persisted; server copy wins for reserved names)
   private equip: Equip = (() => {
+    const name = localStorage.getItem('callsign') ?? 'pilot';
     const m = document.cookie.match(/(?:^|; )ja_equip=([^;]*)/);
     if (m) {
       try {
-        return validateEquip(JSON.parse(decodeURIComponent(m[1])), localStorage.getItem('callsign') ?? 'pilot');
+        const eq = validateEquip(JSON.parse(decodeURIComponent(m[1])), name);
+        // old cookies (and anyone who never chose a face) get a random head
+        // rather than the retired classic painted head
+        if (!eq.head) eq.head = randomHeadId();
+        return eq;
       } catch { /* fall through */ }
     }
-    return defaultEquip(localStorage.getItem('callsign') ?? 'pilot');
+    const eq = defaultEquip(name);
+    eq.head = randomHeadId();
+    return eq;
   })();
 
   // true once this machine holds a deliberate outfit (cookie or a pick)
@@ -1336,11 +1349,17 @@ export class Ui {
     this.equip = validateEquip(this.equip, name);
     rows.innerHTML = '';
     const KINDS: [SkinComponent, keyof Equip, string][] = [
+      ['head', 'head', 'HEAD'],
       ['helmet', 'helmet', 'HELMET'],
       ['torso', 'torso', 'TORSO'],
       ['legs', 'legs', 'LEGS'],
       ['pack', 'pack', 'JETPACK'],
     ];
+    // background focus for baked-image swatches: zoom to the part's cell region
+    const AI_POS: Record<string, string> = {
+      head: '50% 24%', helmet: '50% 6%', torso: '52% 56%', pack: '28% 70%', legs: '0% 45%',
+    };
+    const AI_SIZE: Record<string, string> = { legs: '900% auto' };   // strip -> ~one frame
     for (const [kind, field, label] of KINDS) {
       const row = document.createElement('div');
       row.className = 'skinrow';
@@ -1348,14 +1367,21 @@ export class Ui {
       lab.className = 'skinlabel';
       lab.textContent = label;
       row.appendChild(lab);
-      for (const def of skinsFor(kind, name)) {
+      const defs = skinsFor(kind, name);
+      for (const def of defs) {
         const sw = document.createElement('button');
         sw.className = 'skinsw' + (this.equip[field] === def.id ? ' selected' : '');
         sw.title = def.name;
-        sw.style.background = def.paint === 'gold' ? '#e8c34a'
-          : def.paint === 'floral' ? '#f2f2ff'
-          : def.paint === 'silver' ? '#cfd6de'
-          : paletteFor(def.paint as number | string).base;
+        if (def.file) {
+          sw.style.background = `#20242e url('/skins/${def.file}') no-repeat`;
+          sw.style.backgroundSize = AI_SIZE[kind] ?? '340%';
+          sw.style.backgroundPosition = AI_POS[kind] ?? 'center';
+        } else {
+          sw.style.background = def.paint === 'gold' ? '#e8c34a'
+            : def.paint === 'floral' ? '#f2f2ff'
+            : def.paint === 'silver' ? '#cfd6de'
+            : paletteFor(def.paint as number | string).base;
+        }
         sw.addEventListener('click', () => {
           this.equip[field] = def.id;
           this.equipTouched = true;
@@ -1369,17 +1395,30 @@ export class Ui {
     this.renderSkinPreview();
   }
 
+  private previewSeq = 0;
+
   private renderSkinPreview(): void {
     const cv = el<HTMLCanvasElement>('skinpreview');
     const ctx = cv.getContext('2d')!;
-    ctx.clearRect(0, 0, cv.width, cv.height);
-    const v = buildEquipVariant(this.equip);
-    const k = 2.2;   // px per world unit; body spans 44x74 world units
-    const px = (wx: number): number => (wx + 22) * k + 9;
-    const py = (wy: number): number => (wy + 45) * k + 8;
-    // legs (idle pose), then torso over them — same layering as in-game
-    ctx.drawImage(v.canvas, 272, 0, 168, 162, px(-14), py(2), 28 * k, 27 * k);
-    ctx.drawImage(v.canvas, 0, 0, 264, 348, px(-22), py(-45), 44 * k, 58 * k);
+    const seq = ++this.previewSeq;
+    const draw = (v: { canvas: HTMLCanvasElement; torso: SpriteMetaLike; legs: SpriteMetaLike[] }): void => {
+      if (seq !== this.previewSeq) return;      // a newer preview superseded us
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      const k = 2.2;   // px per world unit
+      const px = (wx: number): number => (wx + 22) * k + 9;
+      const py = (wy: number): number => (wy + 45) * k + 8;
+      const W = v.canvas.width, H = v.canvas.height;
+      const blit = (m: SpriteMetaLike): void => {
+        ctx.drawImage(v.canvas, m.u0 * W, m.v0 * H, (m.u1 - m.u0) * W, (m.v1 - m.v0) * H,
+          px(m.wx0), py(m.wy0), (m.wx1 - m.wx0) * k, (m.wy1 - m.wy0) * k);
+      };
+      blit(v.legs[0]);       // idle legs, then torso over them — in-game layering
+      blit(v.torso);
+    };
+    draw(buildEquipVariant(this.equip));
+    if (equipUsesAi(this.equip)) {
+      void loadEquipImages(this.equip).then((parts) => draw(buildEquipVariantAI(this.equip, parts)));
+    }
   }
 
   private selectedServer: string | null = null;
