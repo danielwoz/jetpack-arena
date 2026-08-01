@@ -12,7 +12,7 @@ import {
 } from '../shared/constants.ts';
 import { CURRENT_MAP, MAP_NAMES, SOLIDS, SPAWN_POINTS, setMap } from '../shared/map.ts';
 import { rayVsSolids } from '../shared/physics.ts';
-import { dist } from '../shared/math.ts';
+import { dist, angleLerp } from '../shared/math.ts';
 import { applyDamage, stepPlayer } from '../shared/step.ts';
 import { TUNE, applyTune, tuneSnapshot } from '../shared/tuning.ts';
 import { appendRoundStats, gunStat } from './stats.ts';
@@ -96,6 +96,8 @@ interface ServerPlayer {
   equip: Equip;
   rtt: number;
   pings: Map<number, number>;   // outstanding ping id → sent-at ms
+  aimAssist: boolean;  // mobile client: server drives bot-style aim + auto-fire
+  assistLos: number;   // consecutive ticks the assist target has been in view
 }
 
 function sanitizeName(raw: unknown): string {
@@ -256,6 +258,7 @@ export class GameRoom {
         const name = this.uniqueName(requested);
         clearTimeout(joinDeadline);
         player = this.createPlayer(conn, name, loadout, nadeType);
+        player.aimAssist = msg.assist === true;
         player.lastHeard = this.tick;
         const saved = isReserved(name) ? savedSkins(name) : undefined;
         player.equip = validateEquip(msg.skins ?? saved?.equip, name, saved?.kills ?? 0);
@@ -360,6 +363,7 @@ export class GameRoom {
       protUntil: 0, lastSpawnTick: 0, lastHeard: 0, rtt: 0, pings: new Map(),
       jetUp: 0, jetOd: 0, jetDive: 0, gunStats: new Map(), fps: { best: 0, avg: 0, low1: 0 },
       equip: defaultEquip(name),
+      aimAssist: false, assistLos: 0,
     };
     this.players.set(p.id, p);
     this.spawn(p, loadout, nadeType);
@@ -461,6 +465,9 @@ export class GameRoom {
             cmd = { ...p.lastCmd, fire: false, reload: false };
           }
         }
+        // mobile players get a good-bot aim-assist: snap onto and auto-fire a
+        // target their stick is already pointing near
+        if (cmd && p.aimAssist) cmd = this.applyAimAssist(p, cmd);
         const res = stepPlayer(p.state, cmd, SOLIDS, this.world);
         if (res.fired) {
           fireBullets(this, p, cmd.rt, this.bullets, cmd.zoom);
@@ -773,6 +780,46 @@ export class GameRoom {
     return { acc, reactTicks: Math.max(1, Math.round(ms / TICK_MS)) };
   }
 
+  // Mobile aim forgiveness: nudge the player's aim toward the nearest enemy
+  // their stick already points near, so their own trigger pulls land. The
+  // player fires manually (right outer ring); this never fires for them. Snap
+  // is strong while firing, gentle otherwise, and capped by the toughest bot's
+  // view window, sight time and accuracy.
+  private applyAimAssist(p: ServerPlayer, cmd: InputCmd): InputCmd {
+    if (!p.state.alive) { p.assistLos = 0; return cmd; }
+    const CONE = 0.6;                       // ~34° each side of the stick heading
+    let bd = Infinity, bx = 0, by = 0, tvx = 0, tvy = 0;
+    for (const o of this.players.values()) {
+      if (o.id === p.id || !o.state.alive) continue;
+      if (!o.bot && this.tick - o.lastSpawnTick < secTicks(3)) continue;
+      if (Math.abs(o.state.x - p.state.x) > 1150) continue;
+      if (Math.abs(o.state.y - p.state.y) > 640) continue;
+      const ang = Math.atan2((o.state.y + 10) - p.state.y, o.state.x - p.state.x);
+      const da = (ang - cmd.aim + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+      if (Math.abs(da) > CONE) continue;    // only assist near where they aim
+      const d = dist(p.state.x, p.state.y, o.state.x, o.state.y);
+      if (d < bd) { bd = d; bx = o.state.x; by = o.state.y; tvx = o.state.vx; tvy = o.state.vy; }
+    }
+    if (bd === Infinity) { p.assistLos = 0; return cmd; }
+    const dx = (bx - p.state.x) / bd, dy = (by - p.state.y) / bd;
+    const tWall = rayVsSolids(p.state.x, p.state.y, dx, dy, SOLIDS, bd, this.world);
+    const clear = tWall === null || tWall >= bd - PLAYER_HW;
+    p.assistLos = clear ? p.assistLos + 1 : 0;
+    if (!clear || p.blindTicks > 0) return cmd;
+    const reactTicks = Math.max(1, Math.round(TUNE.botReactMsHard / TICK_MS));
+    const tracked = Math.min(1, p.assistLos / reactTicks);
+    const targetAim = Math.atan2((by + 10) - p.state.y, bx - p.state.x);
+    // firing snaps hard (forgiving); otherwise a soft magnetism helps tracking
+    const pull = cmd.fire ? 0.85 : 0.28 * tracked;
+    let aim = angleLerp(cmd.aim, targetAim, pull);
+    if (cmd.fire) {
+      const evade = Math.min(1, Math.hypot(tvx, tvy) / (MAX_RUN * SPRINT_MULT));
+      const acc = TUNE.botAccHard * (1 - 0.75 * evade);
+      if (Math.random() > acc) aim += (Math.random() < 0.5 ? -1 : 1) * (0.04 + Math.random() * 0.08);
+    }
+    return { ...cmd, aim };
+  }
+
   // ---- bot navigation: coarse grid + A*, bots patrol map edge to edge
   private navReady = false;
   private navCols = 0;
@@ -898,6 +945,7 @@ export class GameRoom {
       respawnNade: this.randomNade(),
       protUntil: 0, lastSpawnTick: 0, lastHeard: 0, rtt: 0, pings: new Map(),
       jetUp: 0, jetOd: 0, jetDive: 0, gunStats: new Map(), fps: { best: 0, avg: 0, low1: 0 },
+      aimAssist: false, assistLos: 0,
     };
     this.players.set(p.id, p);
     this.spawn(p, loadout);

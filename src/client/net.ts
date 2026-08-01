@@ -4,6 +4,7 @@ import type { Equip } from '../shared/skins.ts';
 import { world } from './world.ts';
 import { applyTune } from '../shared/tuning.ts';
 import { setMap } from '../shared/map.ts';
+import { touch } from './touch.ts';
 
 function serverUrl(serverId?: string): string {
   const params = new URLSearchParams();
@@ -39,7 +40,7 @@ export class Net {
       net.ws = ws;
       let welcomed = false;
 
-      ws.onopen = () => net.send({ t: 'join', name, loadout, nadeType, pw, skins });
+      ws.onopen = () => net.send({ t: 'join', name, loadout, nadeType, pw, skins, assist: touch.enabled });
       ws.onerror = () => { if (!welcomed) reject(new Error('could not reach server')); };
       ws.onclose = () => {
         if (!welcomed) reject(new Error('connection closed'));

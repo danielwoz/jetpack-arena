@@ -18,6 +18,7 @@ import { Overlay } from './render/overlay.ts';
 import { drawScene, ensureTextures, playerColor, setSceneTheme } from './render/scene.ts';
 import { setMap } from '../shared/map.ts';
 import { Ui } from './ui.ts';
+import { touch, TouchControls } from './touch.ts';
 import { world } from './world.ts';
 
 const glCanvas = document.getElementById('gl') as HTMLCanvasElement;
@@ -35,6 +36,10 @@ const predictor = new Predictor();
 const lensCam = new Camera();
 
 input.attach();
+// touch devices get on-screen joysticks + server aim-assist
+if (TouchControls.isTouchDevice()) touch.enable();
+// tapping a weapon chip switches to that slot (mobile weapon change)
+hud.onSlotTap = (slot) => touch.requestSlot(slot);
 ui.onCaptureChange = (capturing) => {
   input.capturing = capturing;
 };
@@ -202,6 +207,8 @@ let perfT = 0;
 let lastJoin: { name: string; loadout: Parameters<typeof Net.connect>[1]; nadeType: Parameters<typeof Net.connect>[2]; serverId?: string; pw?: string } | null = null;
 
 const doJoin = (name: string, loadout: Parameters<typeof Net.connect>[1], nadeType: Parameters<typeof Net.connect>[2], serverId?: string, pw?: string, silent = false): void => {
+  // deploying is a user gesture — the moment to grab fullscreen on touch
+  if (!silent) touch.goFullscreen();
   Net.connect(name, loadout, nadeType, serverId, pw, ui.getEquipForJoin())
     .then((n) => {
       net = n;
@@ -413,6 +420,8 @@ function fixedStep(): void {
   const cw = glCanvas.clientWidth;
   const ch = glCanvas.clientHeight;
   const cmd = input.buildCmd(seq++, Math.max(0, net.renderTick()), st.x, st.y, st.slotIdx, camera, cw, ch);
+  // marksman weapons auto-zoom on mobile — there is no zoom button
+  if (touch.enabled && (st.weapon === 'dmr' || st.weapon === 'sniper')) cmd.zoom = true;
   const res = predictor.apply(cmd);
   net.sendInput(cmd);
   if (res.fired) {
@@ -544,7 +553,7 @@ function render(dtSec: number, alpha: number): void {
 
   // right mouse: marksman overwatch — with the SLR or M24 in hand the whole
   // view pulls back to twice the distance in every direction
-  const wantZoom = (input.zoomHeld || input.padZoomHeld) && st.alive && (st.weapon === 'dmr' || st.weapon === 'sniper');
+  const wantZoom = (input.zoomHeld || input.padZoomHeld || touch.enabled) && st.alive && (st.weapon === 'dmr' || st.weapon === 'sniper');
   camZoom += ((wantZoom ? 2 : 1) - camZoom) * (1 - Math.exp(-8 * dtSec));
   camera.zoom = camZoom;
   lensCam.zoom = camZoom;

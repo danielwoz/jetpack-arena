@@ -2,6 +2,7 @@ import type { InputCmd } from '../shared/types.ts';
 import { bindings } from './bindings.ts';
 import type { Camera } from './camera.ts';
 import { gamepad } from './gamepad.ts';
+import { touch } from './touch.ts';
 
 // Raw device state, sampled into an InputCmd once per simulation tick.
 // Keys map through the rebindable bindings table; fire is the left mouse.
@@ -97,17 +98,25 @@ export class Input {
     canvasH: number
   ): InputCmd {
     const pad = gamepad.sample();
+    const tp = touch.sample();
+    // double-tap heal and weapon-button taps are one-shot touch actions
+    if (tp.heal) this.healQueued = true;
+    if (tp.slot) this.slotQueued = tp.slot;
     const left = this.has('left');
     const right = this.has('right');
     let mx: -1 | 0 | 1 = left === right ? 0 : left ? -1 : 1;
     if (mx === 0 && Math.abs(pad.leftX) > 0.0001) mx = pad.leftX < 0 ? -1 : 1;
+    if (mx === 0 && Math.abs(tp.leftX) > 0.28) mx = tp.leftX < 0 ? -1 : 1;
 
     const m = camera.screenToWorld(this.mouseX, this.mouseY, canvasW, canvasH);
     const mouseAim = Math.atan2(m.y - playerY, m.x - playerX);
 
-    if (pad.rightActive) {
+    const rightActive = pad.rightActive || tp.rightActive;
+    if (rightActive) {
       this.padMode = true;
-      const target = Math.atan2(pad.rightY, pad.rightX);
+      const rx = pad.rightActive ? pad.rightX : tp.rightX;
+      const ry = pad.rightActive ? pad.rightY : tp.rightY;
+      const target = Math.atan2(ry, rx);
       const sens = gamepad.getAimSensitivity();
       this.padAim = this.lerpAngle(this.padAim, target, Math.min(1, 0.16 + sens * 0.84));
       this.stickAimUntil = performance.now() + 140;
@@ -121,7 +130,7 @@ export class Input {
       this.mouseY = playerScreen.y + Math.sin(this.padAim) * r;
     }
 
-    const usePadAim = pad.rightActive || performance.now() < this.stickAimUntil;
+    const usePadAim = rightActive || performance.now() < this.stickAimUntil;
     const aim = usePadAim || this.padMode ? this.padAim : mouseAim;
     if (!usePadAim && !this.padMode) this.padAim = mouseAim;
 
@@ -187,16 +196,16 @@ export class Input {
     const cmd: InputCmd = {
       seq,
       mx,
-      up: this.has('up') || padHold('up'),
+      up: this.has('up') || padHold('up') || tp.jet,
       dn: this.has('down') || padHold('down'),
       jump: this.has('jump') || padHold('jump'),
-      sprint: this.has('sprint') || padHold('sprint'),
+      sprint: this.has('sprint') || padHold('sprint') || tp.sprint,
       slot: this.slotQueued,
       aim,
-      fire: this.fireHeld || pad.pressed.has('PadRT'),
+      fire: this.fireHeld || pad.pressed.has('PadRT') || tp.fire,
       reload: this.reloadQueued,
       heal: this.healQueued,
-      nade: this.has('nade') || padHold('nade'),
+      nade: this.has('nade') || padHold('nade') || tp.nade,
       zoom: this.zoomHeld || this.padZoomHeld,
       rt
     };

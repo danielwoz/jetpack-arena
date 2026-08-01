@@ -39,6 +39,17 @@ export class Hud {
   private minimapCtx = this.minimap.getContext('2d')!;
   private minimapBg: HTMLCanvasElement | null = null;
 
+  // tapping a weapon chip requests that slot (used by the mobile controls)
+  onSlotTap: (slot: number) => void = () => {};
+
+  constructor() {
+    this.slotsEl.addEventListener('click', (e) => {
+      const chip = (e.target as HTMLElement).closest('.slotchip') as HTMLElement | null;
+      const s = chip?.dataset.slot;
+      if (s) this.onSlotTap(Number(s));
+    });
+  }
+
   hide(): void {
     this.hud.classList.add('hidden');
     this.crosshair.classList.add('hidden');
@@ -76,7 +87,7 @@ export class Hud {
     let slotHtml = '';
     for (let i = 0; i < 3; i++) {
       const cls = i === state.slotIdx ? 'slotchip active' : 'slotchip';
-      slotHtml += `<span class="${cls}">${i + 1} ${WEAPONS[state.slots[i]].name}</span>`;
+      slotHtml += `<button class="${cls}" data-slot="${i + 1}">${i + 1} ${WEAPONS[state.slots[i]].name}</button>`;
     }
     if (this.slotsEl.innerHTML !== slotHtml) this.slotsEl.innerHTML = slotHtml;
 

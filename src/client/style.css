@@ -1055,3 +1055,82 @@ button.pad-focus {
 .skinrow .skinlabel { width: 64px; font-size: 10px; letter-spacing: 0.12em; color: #5c6f96; }
 .skinsw { width: 18px; height: 18px; border-radius: 4px; border: 1px solid #24304e; cursor: pointer; padding: 0; }
 .skinsw.selected { outline: 2px solid #4dd7ff; }
+
+/* ---- touch controls (mobile) ---- */
+body.touch { touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+body.touch #gl { cursor: none; }
+#touch-ui { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+body:not(.touch) #touch-ui { display: none; }
+.tc-hint { position: fixed; bottom: calc(84px + env(safe-area-inset-bottom)); width: 144px; height: 144px;
+  border-radius: 50%; border: 2px dotted rgba(255, 255, 255, 0.16); background: rgba(120, 150, 210, 0.04); }
+.tc-hint-l { left: calc(48px + env(safe-area-inset-left)); }
+.tc-hint-r { right: calc(48px + env(safe-area-inset-right)); }
+/* nudge desktop-only chrome clear of notches too */
+body.touch .hud, body.touch #scoreboard { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+/* portrait nudge: this is a landscape game */
+.tc-rotate { position: fixed; inset: 0; z-index: 60; display: none; flex-direction: column; gap: 14px;
+  align-items: center; justify-content: center; background: #05060d; color: #9fc2ff;
+  font-family: system-ui, sans-serif; letter-spacing: 0.12em; }
+.tc-rotate div { font-size: 64px; animation: tc-spin 2.4s ease-in-out infinite; }
+.tc-rotate span { font-size: 13px; text-transform: uppercase; color: #6f86ad; }
+@keyframes tc-spin { 0%, 60% { transform: rotate(0); } 80%, 100% { transform: rotate(90deg); } }
+@media (orientation: portrait) { body.touch .tc-rotate { display: flex; } }
+.tc-base, .tc-knob { position: fixed; border-radius: 50%; transform: translate(-50%, -50%);
+  opacity: 0; transition: opacity 0.08s ease; pointer-events: none; }
+.tc-base { width: 206px; height: 206px; border: 2px solid rgba(160, 190, 240, 0.32);
+  background: rgba(120, 150, 210, 0.08); }
+.tc-knob { width: 72px; height: 72px; border: 2px solid rgba(200, 220, 255, 0.6);
+  background: rgba(150, 185, 240, 0.4); box-shadow: 0 0 16px rgba(0, 0, 0, 0.45); }
+/* hand mobile players more screen: shrink desktop-only chrome */
+body.touch .kbdhint, body.touch #cursor-hint { display: none; }
+
+/* two-zone joystick: dotted outer-ring threshold that lights up on sprint/fire.
+   inset 19px places the ring at the trigger radius (OUTER 0.82 x RADIUS 58) */
+.tc-base::before { content: ''; position: absolute; inset: 46px; border-radius: 50%;
+  border: 2px dotted rgba(200, 220, 255, 0.5); transition: border-color 0.08s; }
+.tc-base.tc-l.hot { box-shadow: 0 0 22px rgba(90, 200, 140, 0.5); }
+.tc-base.tc-r.hot { box-shadow: 0 0 22px rgba(240, 140, 80, 0.55); }
+.tc-base.tc-l.hot::before { border-color: rgba(120, 214, 150, 0.98); }
+.tc-base.tc-r.hot::before { border-color: rgba(244, 150, 90, 0.98); }
+.tc-l.tc-knob { background: rgba(150, 220, 175, 0.4); }
+.tc-r.tc-knob { background: rgba(240, 175, 130, 0.42); }
+
+/* ---- mobile (touch): shrink menus + move HUD clear of the joysticks ---- */
+/* weapon change: tappable slot buttons, top-right */
+body.touch #slots {
+  position: fixed;
+  top: calc(8px + env(safe-area-inset-top));
+  right: calc(10px + env(safe-area-inset-right));
+  margin: 0; gap: 6px; z-index: 42;
+  pointer-events: auto;      /* #hud is pointer-events:none; re-enable taps here */
+  touch-action: manipulation;
+}
+body.touch .slotchip {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+  padding: 8px 11px; background: rgba(8, 11, 24, 0.86);
+}
+body.touch .slotchip.active { background: rgba(28, 42, 88, 0.95); border-color: #6f9bff; color: #eaf1ff; }
+/* minimap sits just below the weapon buttons */
+body.touch #minimap {
+  left: auto; bottom: auto;
+  right: calc(10px + env(safe-area-inset-right));
+  top: calc(56px + env(safe-area-inset-top));
+  width: 148px; height: 56px;
+}
+/* death/elimination text */
+body.touch #deathbanner { font-size: 24px; letter-spacing: 3px; }
+body.touch .panel h1 { font-size: 25px; letter-spacing: 4px; margin-bottom: 3px; }
+body.touch .panel h2 { font-size: 17px; letter-spacing: 2px; margin-bottom: 8px; }
+body.touch .panel .sub { font-size: 11px; margin-bottom: 9px; }
+/* weapon-selection screen: tighter panel + compact cards (4 cols keep it wide/short) */
+body.touch .panel { padding: 12px 14px; }
+body.touch #death .panel { padding: 10px 12px; }
+body.touch .loadout-layout { gap: 6px; }
+body.touch .weapon-grid { gap: 5px; }
+body.touch .weapon-card { padding: 4px 7px; gap: 6px; }
+body.touch .weapon-card .wname { font-size: 11px; margin-bottom: 0; }
+body.touch .weapon-card .wmeta { display: none; }
+body.touch .weapon-icon { width: 54px; height: 23px; }
+body.touch .nade-icon { width: 30px; height: 22px; }
+body.touch #joinbtn, body.touch #respawnbtn { font-size: 16px; letter-spacing: 3px; padding: 9px 18px; }
+body.touch #name { width: 240px; font-size: 15px; margin-bottom: 8px; }

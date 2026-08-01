@@ -6,7 +6,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 const DIST = path.resolve(import.meta.dirname, '../../dist');
 
 // text responses gzip well; images/fonts are already entropy-coded
-const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.svg', '.map', '.json']);
+const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.svg', '.map', '.json', '.webmanifest']);
 
 // compress each file once per deploy: cache keyed by path, invalidated by etag
 const GZ_CACHE = new Map<string, { etag: string; data: Buffer }>();
@@ -22,6 +22,7 @@ const MIME: Record<string, string> = {
   '.json': 'application/json',
   '.woff2': 'font/woff2',
   '.webp': 'image/webp',
+  '.webmanifest': 'application/manifest+json',
 };
 
 export async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<void> {
