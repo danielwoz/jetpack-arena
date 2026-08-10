@@ -24,9 +24,9 @@ export interface TouchSample {
   active: boolean;
 }
 
-const RADIUS = 70;                 // px for full deflection (~20% larger sticks)
+const RADIUS = 77;                 // px for full deflection
 const JET_Y = -0.42;               // left-stick Y past this (up) fires the jets
-const OUTER = 0.82;                // knob past this fraction of RADIUS → sprint/fire
+const OUTER = 0.90;                // knob past this fraction of RADIUS → sprint/fire
 const DBL_MS = 400;                // two taps within this = double-tap
 
 class TouchControls {

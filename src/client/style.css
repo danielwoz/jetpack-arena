@@ -1061,7 +1061,7 @@ body.touch { touch-action: none; overscroll-behavior: none; -webkit-user-select:
 body.touch #gl { cursor: none; }
 #touch-ui { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
 body:not(.touch) #touch-ui { display: none; }
-.tc-hint { position: fixed; bottom: calc(84px + env(safe-area-inset-bottom)); width: 144px; height: 144px;
+.tc-hint { position: fixed; bottom: calc(84px + env(safe-area-inset-bottom)); width: 158px; height: 158px;
   border-radius: 50%; border: 2px dotted rgba(255, 255, 255, 0.16); background: rgba(120, 150, 210, 0.04); }
 .tc-hint-l { left: calc(48px + env(safe-area-inset-left)); }
 .tc-hint-r { right: calc(48px + env(safe-area-inset-right)); }
@@ -1077,16 +1077,16 @@ body.touch .hud, body.touch #scoreboard { padding-left: env(safe-area-inset-left
 @media (orientation: portrait) { body.touch .tc-rotate { display: flex; } }
 .tc-base, .tc-knob { position: fixed; border-radius: 50%; transform: translate(-50%, -50%);
   opacity: 0; transition: opacity 0.08s ease; pointer-events: none; }
-.tc-base { width: 206px; height: 206px; border: 2px solid rgba(160, 190, 240, 0.32);
+.tc-base { width: 227px; height: 227px; border: 2px solid rgba(160, 190, 240, 0.32);
   background: rgba(120, 150, 210, 0.08); }
-.tc-knob { width: 72px; height: 72px; border: 2px solid rgba(200, 220, 255, 0.6);
+.tc-knob { width: 79px; height: 79px; border: 2px solid rgba(200, 220, 255, 0.6);
   background: rgba(150, 185, 240, 0.4); box-shadow: 0 0 16px rgba(0, 0, 0, 0.45); }
 /* hand mobile players more screen: shrink desktop-only chrome */
 body.touch .kbdhint, body.touch #cursor-hint { display: none; }
 
 /* two-zone joystick: dotted outer-ring threshold that lights up on sprint/fire.
    inset 19px places the ring at the trigger radius (OUTER 0.82 x RADIUS 58) */
-.tc-base::before { content: ''; position: absolute; inset: 46px; border-radius: 50%;
+.tc-base::before { content: ''; position: absolute; inset: 44px; border-radius: 50%;
   border: 2px dotted rgba(200, 220, 255, 0.5); transition: border-color 0.08s; }
 .tc-base.tc-l.hot { box-shadow: 0 0 22px rgba(90, 200, 140, 0.5); }
 .tc-base.tc-r.hot { box-shadow: 0 0 22px rgba(240, 140, 80, 0.55); }

@@ -787,7 +787,7 @@ export class GameRoom {
   // view window, sight time and accuracy.
   private applyAimAssist(p: ServerPlayer, cmd: InputCmd): InputCmd {
     if (!p.state.alive) { p.assistLos = 0; return cmd; }
-    const CONE = 0.6;                       // ~34° each side of the stick heading
+    const CONE = 0.78;                      // ~45° each side of the stick heading
     let bd = Infinity, bx = 0, by = 0, tvx = 0, tvy = 0;
     for (const o of this.players.values()) {
       if (o.id === p.id || !o.state.alive) continue;
@@ -808,14 +808,22 @@ export class GameRoom {
     if (!clear || p.blindTicks > 0) return cmd;
     const reactTicks = Math.max(1, Math.round(TUNE.botReactMsHard / TICK_MS));
     const tracked = Math.min(1, p.assistLos / reactTicks);
-    const targetAim = Math.atan2((by + 10) - p.state.y, bx - p.state.x);
-    // firing snaps hard (forgiving); otherwise a soft magnetism helps tracking
-    const pull = cmd.fire ? 0.85 : 0.28 * tracked;
+    // lead a moving target: aim where it will be when a bullet gets there,
+    // assuming constant velocity (bullets are ballistic — travel = dist / speed)
+    const speed = WEAPONS[p.state.weapon].speed || 4600;
+    let travelT = bd / speed;
+    const iterD = Math.hypot((bx + tvx * travelT) - p.state.x, (by + tvy * travelT) - p.state.y);
+    travelT = Math.min(iterD / speed, 0.6);
+    const leadX = bx + tvx * travelT;
+    const leadY = by + tvy * travelT;
+    const targetAim = Math.atan2((leadY + 10) - p.state.y, leadX - p.state.x);
+    // firing snaps hard (forgiving); otherwise a firmer magnetism helps tracking
+    const pull = cmd.fire ? 0.94 : 0.30 + 0.35 * tracked;
     let aim = angleLerp(cmd.aim, targetAim, pull);
     if (cmd.fire) {
       const evade = Math.min(1, Math.hypot(tvx, tvy) / (MAX_RUN * SPRINT_MULT));
-      const acc = TUNE.botAccHard * (1 - 0.75 * evade);
-      if (Math.random() > acc) aim += (Math.random() < 0.5 ? -1 : 1) * (0.04 + Math.random() * 0.08);
+      const acc = TUNE.botAccHard * (1 - 0.45 * evade);
+      if (Math.random() > acc) aim += (Math.random() < 0.5 ? -1 : 1) * (0.02 + Math.random() * 0.05);
     }
     return { ...cmd, aim };
   }
