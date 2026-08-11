@@ -149,8 +149,10 @@ export function fireBullets(
     ? 0
     : clamp(world.tick - rt, 0, LAGCOMP_MAX_TICKS);
   const spread = spreadRad(st.weapon, st.onGround ? 0 : st.heat);
-  // marksman zoom-out doubles reach so bullets fly as far as the eye sees
-  const rangeMult = zoomed && (st.weapon === 'dmr' || st.weapon === 'sniper') ? 2 : 1;
+  // marksman zoom-out doubles reach so bullets fly as far as the eye sees —
+  // but only while standing still (authoritative: matches the client zoom gate)
+  const marksmanStill = st.onGround && Math.abs(st.vx) < 15;
+  const rangeMult = zoomed && marksmanStill && (st.weapon === 'dmr' || st.weapon === 'sniper') ? 2 : 1;
 
   const angles: number[] = [];
   for (let i = 0; i < w.pellets; i++) {

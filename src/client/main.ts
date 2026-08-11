@@ -420,8 +420,12 @@ function fixedStep(): void {
   const cw = glCanvas.clientWidth;
   const ch = glCanvas.clientHeight;
   const cmd = input.buildCmd(seq++, Math.max(0, net.renderTick()), st.x, st.y, st.slotIdx, camera, cw, ch);
-  // marksman weapons auto-zoom on mobile — there is no zoom button
-  if (touch.enabled && (st.weapon === 'dmr' || st.weapon === 'sniper')) cmd.zoom = true;
+  // marksman super-zoom (M24/SLR) only engages while standing still; on mobile
+  // it auto-zooms, on desktop it needs the right-mouse/pad button held
+  if (st.weapon === 'dmr' || st.weapon === 'sniper') {
+    const still = st.onGround && Math.abs(st.vx) < 15;
+    cmd.zoom = still && (touch.enabled || cmd.zoom);
+  }
   const res = predictor.apply(cmd);
   net.sendInput(cmd);
   if (res.fired) {
@@ -552,8 +556,10 @@ function render(dtSec: number, alpha: number): void {
   spawnFade = Math.max(0, spawnFade - dtSec / 2);
 
   // right mouse: marksman overwatch — with the SLR or M24 in hand the whole
-  // view pulls back to twice the distance in every direction
-  const wantZoom = (input.zoomHeld || input.padZoomHeld || touch.enabled) && st.alive && (st.weapon === 'dmr' || st.weapon === 'sniper');
+  // view pulls back to twice the distance, but only while standing still
+  const marksmanStill = st.onGround && Math.abs(st.vx) < 15;
+  const wantZoom = (input.zoomHeld || input.padZoomHeld || touch.enabled) && st.alive
+    && (st.weapon === 'dmr' || st.weapon === 'sniper') && marksmanStill;
   camZoom += ((wantZoom ? 2 : 1) - camZoom) * (1 - Math.exp(-8 * dtSec));
   camera.zoom = camZoom;
   lensCam.zoom = camZoom;
