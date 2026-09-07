@@ -110,7 +110,7 @@ export const SKIN_MANIFEST = {
       "gold",
       "silver"
     ],
-    "rifle": [
+    "m4a1": [
       "def",
       "gold",
       "silver"

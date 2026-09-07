@@ -42,7 +42,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   ump: {
     name: 'UMP45', role: 'steady close-quarters workhorse, low recoil',
-    damage: 24, pellets: 1, rpm: 700, spreadDeg: 2.2,
+    damage: 26, pellets: 1, rpm: 700, spreadDeg: 2.2,
     speed: 4800, heatPerShot: 0.1, heatMax: 4.0, heatDecay: 3,
     mag: 40, reloadSec: 0.43, moveMult: 1.0,
     color: [0.85, 1.0, 0.6],
@@ -50,7 +50,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   mp5: {
     name: 'MP5', role: '',
-    damage: 24, pellets: 1, rpm: 600, spreadDeg: 1.8,
+    damage: 26, pellets: 1, rpm: 600, spreadDeg: 1.8,
     speed: 4800, heatPerShot: 0.1, heatMax: 4.0, heatDecay: 3,
     mag: 40, reloadSec: 0.43, moveMult: 1.0,
     color: [0.7, 1.0, 0.75],
@@ -58,13 +58,13 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   mac10: {
     name: 'MAC-10', role: 'a 50-round sneeze — double rate, wild kick',
-    damage: 18, pellets: 1, rpm: 1200, spreadDeg: 3.2,
+    damage: 22, pellets: 1, rpm: 1200, spreadDeg: 3.2,
     speed: 4600, heatPerShot: 0.1, heatMax: 4.0, heatDecay: 3,
     mag: 50, reloadSec: 0.48, moveMult: 1.02,
     color: [1.0, 0.9, 0.5],
     muzzleLen: 34, falloff: { end: 1100, floor: 0.25 }, headshotMult: 1.25,
   },
-  rifle: {
+  m4a1: {
     name: 'M4A1', role: 'all-rounder — recoil builds as you spray',
     damage: 27, pellets: 1, rpm: 540, spreadDeg: 1.0,
     speed: 6800, heatPerShot: 0.3, heatMax: 6.0, heatDecay: 3,
@@ -156,7 +156,7 @@ export function spreadRad(w: WeaponId, heat: number): number {
 
 // loadout slots: primary / long gun / sidearm
 const LONG_GUNS: WeaponId[] =
-  ['ump', 'mp5', 'mac10', 'rifle', 'ak47', 'mk47', 'm249', 'shotgun', 'sniper', 'dmr'];
+  ['ump', 'mp5', 'mac10', 'm4a1', 'ak47', 'mk47', 'm249', 'shotgun', 'sniper', 'dmr'];
 
 export const SLOT_OPTIONS: [WeaponId[], WeaponId[], WeaponId[]] = [
   [...LONG_GUNS],
@@ -172,7 +172,7 @@ export function falloffMult(w: WeaponId, dist: number): number {
   return 1 - t * (1 - f.floor);
 }
 
-export const DEFAULT_LOADOUT: [WeaponId, WeaponId, WeaponId] = ['rifle', 'shotgun', 'pistol'];
+export const DEFAULT_LOADOUT: [WeaponId, WeaponId, WeaponId] = ['m4a1', 'shotgun', 'pistol'];
 
 export function validLoadout(l: unknown): l is [WeaponId, WeaponId, WeaponId] {
   return Array.isArray(l) && l.length === 3

@@ -123,7 +123,7 @@ if (new URLSearchParams(location.search).has('cells')) {
       return c.toDataURL('image/png');
     };
     const atlas = S.buildSoldierAtlas();
-    const gunIds = ['pistol', 'ump', 'mp5', 'mac10', 'rifle', 'shotgun', 'sniper', 'mk47', 'ak47', 'dmr', 'pan', 'm249'];
+    const gunIds = ['pistol', 'ump', 'mp5', 'mac10', 'm4a1', 'shotgun', 'sniper', 'mk47', 'ak47', 'dmr', 'pan', 'm249'];
     gunIds.forEach((id, i) => {
       out[`gun_${id}`] = grab(atlas.canvas, (i % 4) * 460, 550 + Math.floor(i / 4) * 190, 420, 180);
     });

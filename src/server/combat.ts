@@ -251,11 +251,11 @@ function hitPlayer(world: CombatWorld, b: Bullet, victim: CombatPlayer, hitY: nu
 // Advance every bullet one tick: gravity, terrain (hole-aware), and
 // lag-compensated player hits along this tick's flight segment.
 // long-gun rounds punch straight through bodies and chip the terrain
-const PIERCING = new Set<PlayerState['weapon']>(['rifle', 'ak47', 'mk47', 'dmr', 'sniper', 'm249']);
+const PIERCING = new Set<PlayerState['weapon']>(['m4a1', 'ak47', 'mk47', 'dmr', 'sniper', 'm249']);
 // drilled channel per weapon: rifles bore long and narrow, precision rifles
 // longer and narrower again, the M249 wider
 const CHANNEL: Partial<Record<PlayerState['weapon'], { r: number; len: number }>> = {
-  rifle: { r: 5, len: 34 }, ak47: { r: 5, len: 34 }, mk47: { r: 5, len: 34 },
+  m4a1: { r: 5, len: 34 }, ak47: { r: 5, len: 34 }, mk47: { r: 5, len: 34 },
   m249: { r: 8, len: 34 },
   dmr: { r: 3.5, len: 68 }, sniper: { r: 3.5, len: 204 },
 };

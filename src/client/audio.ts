@@ -15,7 +15,7 @@ const SHOT_VOICES: Partial<Record<WeaponId, ShotVoice>> = {
   ump: { freq: 1700, dur: 0.08, boom: 0.25 },
   mp5: { freq: 1900, dur: 0.07, boom: 0.2 },
   mac10: { freq: 2000, dur: 0.06, boom: 0.2 },
-  rifle: { freq: 1400, dur: 0.12, boom: 0.4 },
+  m4a1: { freq: 1400, dur: 0.12, boom: 0.4 },
   ak47: { freq: 1200, dur: 0.13, boom: 0.5 },
   mk47: { freq: 1500, dur: 0.1, boom: 0.4, metal: true },
   m249: { freq: 1100, dur: 0.14, boom: 0.55 },

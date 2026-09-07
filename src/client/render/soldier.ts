@@ -1903,7 +1903,7 @@ export function buildSoldierAtlas(): SoldierAtlas {
     ['ump', paintUMP],
     ['mp5', paintMP5],
     ['mac10', paintMAC10],
-    ['rifle', paintM4],
+    ['m4a1', paintM4],
     ['shotgun', paintM870],
     ['sniper', paintM24],
     ['mk47', paintMK47],
@@ -1942,7 +1942,7 @@ export function buildGunIconDataUrls(includeArms = false): Record<WeaponId, stri
   const atlas = buildSoldierAtlas();
   ARMS_ENABLED = prev;
 
-  const ids: WeaponId[] = ['pistol', 'ump', 'mp5', 'mac10', 'rifle', 'shotgun', 'sniper', 'mk47', 'ak47', 'dmr', 'pan', 'm249'];
+  const ids: WeaponId[] = ['pistol', 'ump', 'mp5', 'mac10', 'm4a1', 'shotgun', 'sniper', 'mk47', 'ak47', 'dmr', 'pan', 'm249'];
   const out = {} as Record<WeaponId, string>;
   ids.forEach((id, i) => {
     const cx = (i % 4) * 460;
@@ -1964,7 +1964,7 @@ export function buildGunIconDataUrls(includeArms = false): Record<WeaponId, stri
         bctx.fillStyle = g;
         bctx.fillRect(x, y, w, h);
       };
-      if (id === 'rifle') {
+      if (id === 'm4a1') {
         metal(17, 15, 12, 3);
         metal(19, 18, 10, 3);
       } else if (id === 'm249') {

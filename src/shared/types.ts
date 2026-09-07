@@ -1,6 +1,6 @@
 export type WeaponId =
   | 'ump' | 'mp5' | 'mac10'                    // slot 1: the SMG family
-  | 'rifle' | 'ak47' | 'mk47' | 'm249'         // slot 1: rifles + LMG
+  | 'm4a1' | 'ak47' | 'mk47' | 'm249'         // slot 1: rifles + LMG
   | 'shotgun' | 'sniper' | 'dmr'               // slot 2: shotgun / bolt / DMR
   | 'pistol' | 'pan';                          // slot 3: sidearm / cookware
 
